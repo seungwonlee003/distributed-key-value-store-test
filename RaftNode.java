@@ -12,6 +12,9 @@ public class RaftNode {
     private final int electionTimeoutMin = 150;
     private final int electionTimeoutMax = 300;
     private final RestTemplate restTemplate = new RestTemplate();
+    
+    // Store the current election timer task to allow cancellation
+    private ScheduledFuture<?> electionFuture;
 
     public RaftNode(RaftNodeState state, List<String> peerUrls) {
         this.state = state;
@@ -24,9 +27,17 @@ public class RaftNode {
         }
     }
 
+    /**
+     * Resets the election timer. If a previous timer is pending, it gets canceled.
+     * The new timer is set with a random timeout.
+     */
     private void resetElectionTimer() {
+        // Cancel the previous election timer if it's still pending
+        if (electionFuture != null && !electionFuture.isDone()) {
+            electionFuture.cancel(false);
+        }
         int timeout = electionTimeoutMin + random.nextInt(electionTimeoutMax - electionTimeoutMin);
-        scheduler.schedule(new Runnable() {
+        electionFuture = scheduler.schedule(new Runnable() {
             @Override
             public void run() {
                 startElection();
@@ -114,7 +125,7 @@ public class RaftNode {
         }
     }
 
-    /** Retries the election if a majority is not reached */
+    /** Retries the election if a majority of votes is not reached */
     private void retryElection() {
         int retryTimeout = electionTimeoutMin + random.nextInt(electionTimeoutMax - electionTimeoutMin);
         System.out.println("🔄 Node " + state.getNodeId() + " retrying election in " + retryTimeout + "ms");
