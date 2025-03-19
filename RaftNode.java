@@ -4,7 +4,6 @@ import org.springframework.web.client.RestTemplate;
 import javax.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class RaftNode {
     private final RaftNodeState state;
@@ -121,6 +120,11 @@ public class RaftNode {
         }
     }
 
+    /**
+     * Initiates an election by sending vote requests to all peers and waiting for all responses
+     * (or timeouts) before deciding leadership. This prevents brief leadership if a higher-term
+     * response arrives late.
+     */
     private void startElection() {
         synchronized (this) {
             if (state.getRole() != Role.FOLLOWER && state.getRole() != Role.CANDIDATE) {
@@ -131,37 +135,59 @@ public class RaftNode {
             state.setVotedFor(state.getNodeId());
 
             int currentTerm = state.getCurrentTerm();
-            AtomicInteger votes = new AtomicInteger(1);
+            List<CompletableFuture<Boolean>> voteFutures = new ArrayList<>();
 
+            // Collect vote futures from all peers
             for (String peerUrl : peerUrls) {
-                requestVoteAsync(currentTerm, state.getNodeId(), state.getLastLogIndex(), state.getLastLogTerm(), peerUrl)
-                        .thenAccept(granted -> {
-                            if (granted) {
-                                int totalVotes = votes.incrementAndGet();
-                                synchronized (this) {
-                                    if (totalVotes > peerUrls.size() / 2 &&
-                                        state.getRole() == Role.CANDIDATE &&
-                                        state.getCurrentTerm() == currentTerm) {
-                                        becomeLeader();
-                                    }
-                                }
-                            }
-                        }).exceptionally(ex -> {
-                            System.err.println("❌ Exception requesting vote: " + ex.getMessage());
-                            return null;
-                        });
+                voteFutures.add(requestVoteAsync(currentTerm, state.getNodeId(), 
+                                                 state.getLastLogIndex(), state.getLastLogTerm(), 
+                                                 peerUrl));
             }
+
+            // Wait for all vote requests to complete or timeout
+            CompletableFuture.allOf(voteFutures.toArray(new CompletableFuture[0])).thenRun(() -> {
+                synchronized (this) {
+                    // Ensure still a candidate in the same term after all responses
+                    if (state.getRole() == Role.CANDIDATE && state.getCurrentTerm() == currentTerm) {
+                        int voteCount = 1; // Include self-vote
+                        for (CompletableFuture<Boolean> future : voteFutures) {
+                            try {
+                                if (future.get()) { // Safe to call get() since all futures are done
+                                    voteCount++;
+                                }
+                            } catch (Exception e) {
+                                // Treat exceptions as false votes
+                            }
+                        }
+                        // Become leader if majority votes received
+                        if (voteCount > peerUrls.size() / 2) {
+                            becomeLeader();
+                        } else {
+                            // Did not win, reset timer for next election attempt
+                            resetElectionTimer();
+                        }
+                    }
+                    // If role or term changed (e.g., stepped down), do nothing
+                }
+            }).exceptionally(ex -> {
+                System.err.println("❌ Election failed: " + ex.getMessage());
+                return null;
+            });
         }
     }
 
-    private CompletableFuture<Boolean> requestVoteAsync(int term, int candidateId,
-                                                        int lastLogIndex, int lastLogTerm,
+    /**
+     * Sends a vote request to a peer asynchronously with a 300ms timeout.
+     * Steps down to follower if a higher term is received.
+     */
+    private CompletableFuture<Boolean> requestVoteAsync(int term, int candidateId, 
+                                                        int lastLogIndex, int lastLogTerm, 
                                                         String peerUrl) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 String url = peerUrl + "/raft/vote";
                 RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
-                ResponseEntity<VoteResponseDTO> response =
+                ResponseEntity<VoteResponseDTO> response = 
                         restTemplate.postForEntity(url, dto, VoteResponseDTO.class);
 
                 VoteResponseDTO body = response.getBody();
@@ -182,8 +208,7 @@ public class RaftNode {
                 return false;
             }
         }, asyncExecutor)
-        .orTimeout(300, TimeUnit.MILLISECONDS)
-        .completeOnTimeout(false, 300, TimeUnit.MILLISECONDS);
+        .completeOnTimeout(false, 300, TimeUnit.MILLISECONDS); // Timeout after 300ms
     }
 
     private void becomeLeader() {
