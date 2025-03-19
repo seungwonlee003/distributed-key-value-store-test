@@ -1,0 +1,3 @@
+enum Role {
+    FOLLOWER, CANDIDATE, LEADER
+}
