@@ -37,6 +37,51 @@ public class RaftNode {
     }
 
     /**
+     * Periodically send heartbeats to maintain leadership.
+     */
+    private void sendHeartbeats() {
+        scheduler.scheduleAtFixedRate(() -> {
+            synchronized (this) {
+                if (state.getRole() == Role.LEADER) {
+                    for (String peerUrl : peerUrls) {
+                        sendHeartbeat(peerUrl);
+                    }
+                }
+            }
+        }, 0, 100, TimeUnit.MILLISECONDS);
+    }
+
+    private void sendHeartbeat(String peerUrl) {
+        try {
+            String url = peerUrl + "/raft/heartbeat";
+            HeartbeatDTO hb = new HeartbeatDTO(state.getCurrentTerm(), state.getNodeId());
+            restTemplate.postForEntity(url, hb, Void.class);
+        } catch (Exception e) {
+            System.err.println("❌ Error sending heartbeat to " + peerUrl + ": " + e.getMessage());
+        }
+    }
+
+    public synchronized void receiveHeartbeat(int term) {
+        if (term > state.getCurrentTerm()) {
+            state.setCurrentTerm(term);
+            state.setRole(Role.FOLLOWER);
+            state.setVotedFor(null);
+            resetElectionTimer();
+            return;
+        }
+        if (term == state.getCurrentTerm() && state.getRole() == Role.CANDIDATE) {
+            state.setRole(Role.FOLLOWER);
+        }
+        resetElectionTimer();
+    }
+    
+    private void resetElectionTimer() {
+        cancelElectionTimerIfRunning();
+        int timeout = electionTimeoutMin + random.nextInt(electionTimeoutMax - electionTimeoutMin);
+        electionFuture = scheduler.schedule(this::startElection, timeout, TimeUnit.MILLISECONDS);
+    }
+
+    /**
      * Handles an incoming vote request.
      */
     public synchronized boolean handleVoteRequest(RequestVoteDTO requestVote) {
@@ -179,45 +224,6 @@ public class RaftNode {
         state.setRole(Role.LEADER);
         System.out.println("👑 Node " + state.getNodeId() + " became leader for term " + state.getCurrentTerm());
         sendHeartbeats();
-    }
-
-    /**
-     * Periodically send heartbeats to maintain leadership.
-     */
-    private void sendHeartbeats() {
-        scheduler.scheduleAtFixedRate(() -> {
-            synchronized (this) {
-                if (state.getRole() == Role.LEADER) {
-                    for (String peerUrl : peerUrls) {
-                        sendHeartbeat(peerUrl);
-                    }
-                }
-            }
-        }, 0, 100, TimeUnit.MILLISECONDS);
-    }
-
-    private void sendHeartbeat(String peerUrl) {
-        try {
-            String url = peerUrl + "/raft/heartbeat";
-            HeartbeatDTO hb = new HeartbeatDTO(state.getCurrentTerm(), state.getNodeId());
-            restTemplate.postForEntity(url, hb, Void.class);
-        } catch (Exception e) {
-            System.err.println("❌ Error sending heartbeat to " + peerUrl + ": " + e.getMessage());
-        }
-    }
-
-    public synchronized void receiveHeartbeat(int term) {
-        if (term > state.getCurrentTerm()) {
-            state.setCurrentTerm(term);
-            state.setRole(Role.FOLLOWER);
-            state.setVotedFor(null);
-            resetElectionTimer();
-            return;
-        }
-        if (term == state.getCurrentTerm() && state.getRole() == Role.CANDIDATE) {
-            state.setRole(Role.FOLLOWER);
-        }
-        resetElectionTimer();
     }
 
     private void retryElection() {
