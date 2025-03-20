@@ -6,9 +6,11 @@ import org.springframework.web.bind.annotation.*;
 public class RaftController {
 
     private final RaftNode raftNode;
+    private final RaftLogManager raftLogManager;
 
-    public RaftController(RaftNode raftNode) {
+    public RaftController(RaftNode raftNode, RaftLogManager raftLogManager) {
         this.raftNode = raftNode;
+        this.raftLogManager = raftLogManager;
     }
 
     @PostMapping("/vote")
@@ -17,15 +19,10 @@ public class RaftController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/heartbeat")
-    public ResponseEntity<Void> heartbeat(@RequestBody HeartbeatDTO heartbeatDTO) {
-        raftNode.receiveHeartbeat(heartbeatDTO.getTerm());
-        return ResponseEntity.ok().build();
-    }
-
-    // assumes only leader receives appendEntry request
-    @PostMapping("/appendEntry")
-    public AppendEntryResponseDTO appendEntry(@RequestBody AppendEntryDTO dto) {
-        return logManager.handleAppendEntries(dto);
+    // Combined AppendEntries endpoint used both for heartbeats (empty entries) and log replication.
+    @PostMapping("/appendEntries")
+    public ResponseEntity<AppendEntryResponseDTO> appendEntries(@RequestBody AppendEntryDTO dto) {
+        AppendEntryResponseDTO response = raftLogManager.handleAppendEntries(dto);
+        return ResponseEntity.ok(response);
     }
 }
