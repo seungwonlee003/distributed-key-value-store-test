@@ -31,30 +31,30 @@ public class RaftNode {
         if (state.getRole() == Role.FOLLOWER || state.getRole() == Role.CANDIDATE) {
             resetElectionTimer();
         } else if (state.getRole() == Role.LEADER) {
-            sendHeartbeats();
+            startHeartBeats();
         }
     }
 
     private void startHeartbeats() {
-            stopHeartbeats(); // Ensure any existing heartbeat task is stopped
-            heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
-                synchronized (this) {
-                    if (state.getRole() == Role.LEADER) {
-                        for (String peerUrl : peerUrls) {
-                            sendHeartbeat(peerUrl); // Fixed typo
-                        }
-                    }
+        stopHeartbeats(); // Ensure any existing heartbeat task is stopped
+        if(state.getRole() != Role.LEADER) return;
+        
+        heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
+            synchronized (this) {
+                for (String peerUrl : peerUrls) {
+                    sendHeartbeat(peerUrl); // Fixed typo
                 }
-            }, 0, 100, TimeUnit.MILLISECONDS); // Start immediately, repeat every 100ms
-        }
-    
-        // Stop heartbeat scheduling (e.g., when stepping down)
-        private void stopHeartbeats() {
-            if (heartbeatFuture != null && !heartbeatFuture.isDone()) {
-                heartbeatFuture.cancel(false);
-                heartbeatFuture = null;
             }
+        }, 0, 100, TimeUnit.MILLISECONDS); // Start immediately, repeat every 100ms
+    }
+    
+    // Stop heartbeat scheduling (e.g., when stepping down)
+    private void stopHeartbeats() {
+        if (heartbeatFuture != null && !heartbeatFuture.isDone()) {
+            heartbeatFuture.cancel(false);
+            heartbeatFuture = null;
         }
+    }
 
     private void sendHeartbeat(String peerUrl) {
         try {
