@@ -22,4 +22,9 @@ public class RaftController {
         raftNode.receiveHeartbeat(heartbeatDTO.getTerm());
         return ResponseEntity.ok().build();
     }
+    
+    @PostMapping("/appendEntry")
+    public AppendEntryResponseDTO appendEntry(@RequestBody AppendEntryDTO dto) {
+        return logManager.handleAppendEntries(dto);
+    }
 }
