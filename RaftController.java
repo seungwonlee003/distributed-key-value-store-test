@@ -22,7 +22,8 @@ public class RaftController {
         raftNode.receiveHeartbeat(heartbeatDTO.getTerm());
         return ResponseEntity.ok().build();
     }
-    
+
+    // assumes only leader receives appendEntry request
     @PostMapping("/appendEntry")
     public AppendEntryResponseDTO appendEntry(@RequestBody AppendEntryDTO dto) {
         return logManager.handleAppendEntries(dto);
