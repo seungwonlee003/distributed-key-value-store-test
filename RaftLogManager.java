@@ -1,7 +1,7 @@
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -12,12 +12,16 @@ public class RaftLogManager {
     private final RaftNode raftNode;
     private final RaftLog raftLog;
     private final RaftNodeState raftNodeState;
-    private final Map<String, Integer> nextIndex = raftNodeState.nextIndex;
-    private final Map<String, Integer> matchIndex = raftNodeState.matchIndex;
+    private final Map<String, Integer> nextIndex;
+    private final Map<String, Integer> matchIndex;
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
+        this.raftNodeState = raftNode.getState();
+        // Initialize our own maps for follower replication.
+        this.nextIndex = new ConcurrentHashMap<>();
+        this.matchIndex = new ConcurrentHashMap<>();
         initializeIndices();
     }
 
@@ -35,7 +39,7 @@ public class RaftLogManager {
     /**
      * Handles incoming AppendEntries RPCs from the leader.
      * Returns the current term and success status, plus the last matching index if failed.
-     * Raft paper Section 5.3.
+     * (Raft paper Section 5.3)
      */
     public synchronized AppendEntryResponseDTO handleAppendEntries(AppendEntryDTO dto) {
         int currentTerm = raftNode.getState().getCurrentTerm();
@@ -45,26 +49,20 @@ public class RaftLogManager {
         List<LogEntry> entries = dto.getEntries();
         int leaderCommit = dto.getLeaderCommit();
 
-        // 1. Reject if leader's term is less than current term
         if (leaderTerm < currentTerm) {
             return new AppendEntryResponseDTO(currentTerm, false, raftLog.getLastIndex());
         }
-
-        // 2. Update term and step down if leader's term is higher
         if (leaderTerm > currentTerm) {
             raftNode.getState().setCurrentTerm(leaderTerm);
             raftNode.getState().setRole(Role.FOLLOWER);
             raftNode.getState().setVotedFor(null);
             raftNode.resetElectionTimer();
+            currentTerm = leaderTerm;
         }
-
-        // 3. Check log consistency at prevLogIndex
         if (prevLogIndex > 0 && (!raftLog.containsEntryAt(prevLogIndex) || raftLog.getTermAt(prevLogIndex) != prevLogTerm)) {
             int lastMatchingIndex = findLastMatchingIndex(prevLogIndex);
             return new AppendEntryResponseDTO(currentTerm, false, lastMatchingIndex);
         }
-
-        // 4. Resolve conflicts and append entries
         int index = prevLogIndex + 1;
         for (LogEntry entry : entries) {
             if (raftLog.containsEntryAt(index)) {
@@ -77,42 +75,57 @@ public class RaftLogManager {
             }
             index++;
         }
-
-        // 5. Update commit index
         if (leaderCommit > raftLog.getCommitIndex()) {
             int lastNewEntryIndex = prevLogIndex + entries.size();
             raftLog.setCommitIndex(Math.min(leaderCommit, lastNewEntryIndex));
         }
-
         return new AppendEntryResponseDTO(currentTerm, true, raftLog.getLastIndex());
     }
 
     /**
+     * Sends heartbeat messages to all followers using AppendEntries with an empty log.
+     */
+    public void sendHeartbeatToFollowers() {
+        int currentTerm = raftNode.getState().getCurrentTerm();
+        int lastLogIndex = raftLog.getLastIndex();
+        int prevLogIndex = lastLogIndex;
+        int prevLogTerm = lastLogIndex > 0 ? raftLog.getTermAt(lastLogIndex) : 0;
+        int commitIndex = raftLog.getCommitIndex();
+
+        AppendEntryDTO heartbeatDto = new AppendEntryDTO(
+            currentTerm,
+            raftNode.getState().getNodeId(),
+            prevLogIndex,
+            prevLogTerm,
+            Collections.emptyList(),
+            commitIndex
+        );
+        for (String peerUrl : raftNode.getPeerUrls()) {
+            sendAppendEntriesAsync(peerUrl, heartbeatDto);
+        }
+    }
+
+    /**
      * Replicates a log entry to followers, adjusting nextIndex on mismatch and retrying.
-     * Raft paper Section 5.3.
      */
     public void replicateLogEntryToFollowers(LogEntry entry) {
         if (raftNode.getState().getRole() != Role.LEADER) {
             return;
         }
-
-        // Append to leader's log first
+        // Append the entry to the leader’s log.
         raftLog.append(entry);
         int currentTerm = raftNode.getState().getCurrentTerm();
         int lastLogIndex = raftLog.getLastIndex();
 
-        // Update nextIndex for new followers or reset on leader election
         if (nextIndex.isEmpty()) {
             initializeIndices();
         }
 
-        // Send AppendEntries RPCs to all followers
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         for (String peerUrl : raftNode.getPeerUrls()) {
             futures.add(replicateToFollower(peerUrl, currentTerm, lastLogIndex));
         }
 
-        // Process replication results and commit if majority achieved
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
             int replicatedCount = 0;
             for (String peerUrl : raftNode.getPeerUrls()) {
@@ -120,7 +133,9 @@ public class RaftLogManager {
                     replicatedCount++;
                 }
             }
-            if (replicatedCount >= raftNode.getPeerUrls().size() / 2) {
+            int totalNodes = raftNode.getPeerUrls().size() + 1;
+            int majority = totalNodes / 2 + 1;
+            if (replicatedCount + 1 >= majority) { // Include leader's own replication.
                 raftLog.setCommitIndex(lastLogIndex);
             }
         });
@@ -155,7 +170,6 @@ public class RaftLogManager {
                         raftNode.resetElectionTimer();
                         return;
                     }
-
                     if (response.isSuccess()) {
                         nextIndex.put(peerUrl, ni + entriesToSend.size());
                         matchIndex.put(peerUrl, ni + entriesToSend.size() - 1);
@@ -185,7 +199,7 @@ public class RaftLogManager {
     }
 
     /**
-     * Finds the last index where the log matches the leader's prevLogIndex and prevLogTerm.
+     * Finds the last index where the log matches up to prevLogIndex.
      */
     private int findLastMatchingIndex(int prevLogIndex) {
         for (int i = Math.min(prevLogIndex, raftLog.getLastIndex()); i >= 1; i--) {
