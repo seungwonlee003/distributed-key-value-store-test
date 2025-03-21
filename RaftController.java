@@ -31,7 +31,7 @@ public class RaftController {
             LogEntry entry = new LogEntry(raftLogManager.getRaftNodeState().getCurrentTerm(), data);
             CompletableFuture<Void> commitFuture = raftLogManager.replicateLogToFollowers(Collections.singletonList(entry));
             try {
-                commitFuture.get(10, TimeUnit.SECONDS); // Block until committed or timeout
+                commitFuture.get(2, TimeUnit.SECONDS); // Block until committed or timeout
                 return ResponseEntity.ok("Write committed");
             } catch (Exception e) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Write failed");
