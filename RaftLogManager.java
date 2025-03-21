@@ -129,7 +129,7 @@ public class RaftLogManager {
             }
         };
         raftLog.addCommitIndexListener(listener);
-        return future;
+        return future.orTimeout(10, TimeUnit.SECONDS); // Fails after 10s
     }
 
     private void updateCommitIndex(int currentTerm) {
