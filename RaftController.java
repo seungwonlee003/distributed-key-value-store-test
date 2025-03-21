@@ -27,14 +27,24 @@ public class RaftController {
     }
     
     @PostMapping("/write")
-        public ResponseEntity<String> write(@RequestBody String data) {
-            LogEntry entry = new LogEntry(raftLogManager.getRaftNodeState().getCurrentTerm(), data);
-            CompletableFuture<Void> commitFuture = raftLogManager.replicateLogToFollowers(Collections.singletonList(entry));
-            try {
-                commitFuture.get(2, TimeUnit.SECONDS); // Block until committed or timeout
-                return ResponseEntity.ok("Write committed");
-            } catch (Exception e) {
-                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Write failed");
-            }
+    public ResponseEntity<String> write(@RequestBody String data) {
+        if (raftNode.getState().getRole() != Role.LEADER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
+
+        LogEntry entry = new LogEntry(raftLogManager.getRaftNodeState().getCurrentTerm(), data);
+
+        // We choose some "overall" replication timeout for the entire set of new entries
+        long replicationTimeoutMs = 2000;
+
+        try {
+            // Now it's a blocking call. If it fails, we know replication didn't succeed
+            raftLogManager.replicateLogToFollowers(Collections.singletonList(entry), replicationTimeoutMs);
+
+            // If we reach here, majority replication succeeded and commitIndex advanced
+            return ResponseEntity.ok("Write committed");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Write failed: " + e.getMessage());
+        }
+    }
 }
