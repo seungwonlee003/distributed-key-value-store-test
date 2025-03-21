@@ -105,7 +105,7 @@ public class RaftLogManager {
         // For each follower, replicate asynchronously (possibly re-trying) ...
         @SuppressWarnings("unchecked")
         CompletableFuture<Boolean>[] futures = raftNode.getPeerUrls().stream()
-                .map(peerUrl -> replicateToFollower(peerUrl, currentTerm, finalIndexOfNewEntries))
+                .map(peerUrl -> replicateToFollower(peerUrl, currentTerm, finalIndexOfNewEntries, 500))
                 .toArray(CompletableFuture[]::new);
     
         int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
@@ -156,54 +156,80 @@ public class RaftLogManager {
     
         return majorityFuture;
     }
-
-
-    private CompletableFuture<Void> replicateToFollower(String peerUrl, int currentTerm, int targetIndex) {
-        return CompletableFuture.runAsync(() -> {
+    
+    private CompletableFuture<Void> replicateToFollower(
+            String peerUrl, int currentTerm, int targetIndex, long timeoutMs) {
+    
+        // The core replication logic remains the same:
+        CompletableFuture<Void> replicationFuture = CompletableFuture.runAsync(() -> {
             synchronized (this) {
                 if (raftNodeState.getRole() != Role.LEADER) return;
-
+    
                 int ni = nextIndex.get(peerUrl);
                 int prevLogIndex = Math.max(0, ni - 1);
-                int prevLogTerm = prevLogIndex > 0 ? raftLog.getTermAt(prevLogIndex) : 0;
+                int prevLogTerm = (prevLogIndex > 0) ? raftLog.getTermAt(prevLogIndex) : 0;
                 List<LogEntry> entriesToSend = getEntriesFrom(ni, targetIndex);
-
+    
+                // Build AppendEntry
                 AppendEntryDTO dto = new AppendEntryDTO(
-                    currentTerm, raftNodeState.getNodeId(), prevLogIndex, prevLogTerm,
-                    entriesToSend, raftLog.getCommitIndex()
+                    currentTerm,
+                    raftNodeState.getNodeId(),
+                    prevLogIndex,
+                    prevLogTerm,
+                    entriesToSend,
+                    raftLog.getCommitIndex()
                 );
-
-                AppendEntryResponseDTO response = sendAppendEntriesAsync(peerUrl, dto).join();
+    
+                // Send request (blocking this thread until done)
+                AppendEntryResponseDTO response = sendAppendEntriesAsync(peerUrl, dto, 500).join();
+    
+                // Compare terms
                 if (response.getTerm() > currentTerm) {
+                    // Step down if higher term found
                     raftNodeState.setCurrentTerm(response.getTerm());
                     raftNodeState.setRole(Role.FOLLOWER);
                     raftNodeState.setVotedFor(null);
                     raftNode.resetElectionTimer();
                     return;
                 }
+    
+                // If success, advance matchIndex / nextIndex
                 if (response.isSuccess()) {
                     nextIndex.put(peerUrl, ni + entriesToSend.size());
                     matchIndex.put(peerUrl, ni + entriesToSend.size() - 1);
                 } else {
-                    ni = Math.max(1, ni - 1); // Decrement by 1
+                    // Conflict => decrement nextIndex by 1
+                    ni = Math.max(1, ni - 1);
                     nextIndex.put(peerUrl, ni);
                 }
             }
         }, raftNode.getAsyncExecutor());
+    
+        // Attach a timeout to the replication future:
+        // If the future does not complete within 'timeoutMs', it completes exceptionally.
+        return replicationFuture.orTimeout(timeoutMs, TimeUnit.MILLISECONDS);
     }
 
-    private CompletableFuture<AppendEntryResponseDTO> sendAppendEntriesAsync(String peerUrl, AppendEntryDTO dto) {
-        return CompletableFuture.supplyAsync(() -> {
+    private CompletableFuture<AppendEntryResponseDTO> sendAppendEntriesAsync(String peerUrl, AppendEntryDTO dto, long timeoutMs) {
+        CompletableFuture<AppendEntryResponseDTO> future = CompletableFuture.supplyAsync(() -> {
             try {
                 String url = peerUrl + "/raft/appendEntries";
                 ResponseEntity<AppendEntryResponseDTO> response = raftNode.getRestTemplate()
                     .postForEntity(url, dto, AppendEntryResponseDTO.class);
-                return response.getBody() != null ? response.getBody() : new AppendEntryResponseDTO(-1, false);
+    
+                if (response.getBody() != null) {
+                    return response.getBody();
+                } else {
+                    return new AppendEntryResponseDTO(-1, false);
+                }
             } catch (Exception e) {
                 return new AppendEntryResponseDTO(-1, false);
             }
         }, raftNode.getAsyncExecutor());
+    
+        return future.orTimeout(timeoutMs, TimeUnit.MILLISECONDS);
     }
+
 
     private List<LogEntry> getEntriesFrom(int startIndex, int endIndex) {
         List<LogEntry> entries = new ArrayList<>();
