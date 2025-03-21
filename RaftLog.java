@@ -1,15 +1,20 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 /**
  * A class to manage the log of entries in a Raft consensus system.
- * It handles appending, deleting, and querying log entries, as well as tracking the commit index.
+ * It handles appending, deleting, and querying log entries, as well as tracking the commit index
+ * and notifying listeners when the commit index changes.
  */
 public class RaftLog {
     // List to hold log entries, starting from index 1 as per Raft convention
     private final List<LogEntry> logEntries = new ArrayList<>();
     // Commit index: the highest log entry known to be committed
     private int commitIndex = 0;
+    // Listeners for commit index changes, using a thread-safe collection
+    private final List<Consumer<Integer>> commitIndexListeners = new CopyOnWriteArrayList<>();
 
     /**
      * Constructor initializes the log with a dummy entry at index 0.
@@ -87,11 +92,13 @@ public class RaftLog {
 
     /**
      * Sets the commit index to a new value, ensuring it doesn't exceed the last log index.
+     * Notifies all registered listeners if the commit index is updated.
      * @param newCommitIndex The new commit index.
      */
     public void setCommitIndex(int newCommitIndex) {
         if (newCommitIndex > commitIndex && newCommitIndex <= getLastIndex()) {
             commitIndex = newCommitIndex;
+            commitIndexListeners.forEach(listener -> listener.accept(commitIndex));
             // Note: Applying committed entries to the state machine could be added here.
         }
     }
@@ -107,5 +114,20 @@ public class RaftLog {
         }
         return null;
     }
-}
 
+    /**
+     * Adds a listener to be notified when the commit index changes.
+     * @param listener The listener to add, which accepts the new commit index.
+     */
+    public void addCommitIndexListener(Consumer<Integer> listener) {
+        commitIndexListeners.add(listener);
+    }
+
+    /**
+     * Removes a commit index listener.
+     * @param listener The listener to remove.
+     */
+    public void removeCommitIndexListener(Consumer<Integer> listener) {
+        commitIndexListeners.remove(listener);
+    }
+}
