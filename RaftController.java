@@ -27,14 +27,14 @@ public class RaftController {
     }
     
     @PostMapping("/write")
-    public ResponseEntity<String> write(@RequestBody String command) {
-        if (raftNodeState.getRole() != Role.LEADER) {
-            return ResponseEntity.status(503).body("Not the leader");
+        public ResponseEntity<String> write(@RequestBody String data) {
+            LogEntry entry = new LogEntry(raftLogManager.getRaftNodeState().getCurrentTerm(), data);
+            CompletableFuture<Void> commitFuture = raftLogManager.replicateLogToFollowers(Collections.singletonList(entry));
+            try {
+                commitFuture.get(10, TimeUnit.SECONDS); // Block until committed or timeout
+                return ResponseEntity.ok("Write committed");
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Write failed");
+            }
         }
-        LogEntry entry = new LogEntry(raftNodeState.getCurrentTerm(), command);
-        int entryIndex = raftLog.append(entry);
-        raftLogManager.replicateLogToFollowers(null); // Trigger replication
-        raftLogManager.waitForCommit(entryIndex).join(); // Wait for commit
-        return ResponseEntity.ok("Write accepted: " + command);
-    }
 }
