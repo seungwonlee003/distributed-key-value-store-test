@@ -44,7 +44,7 @@ public class RaftLogManager {
         int leaderCommit = dto.getLeaderCommit();
 
         if (leaderTerm < currentTerm) {
-            return new AppendEntryResponseDTO(currentTerm, false, raftLog.getLastIndex());
+            return new AppendEntryResponseDTO(currentTerm, false);
         }
 
         if (leaderTerm > currentTerm) {
@@ -56,8 +56,7 @@ public class RaftLogManager {
         }
 
         if (prevLogIndex > 0 && (!raftLog.containsEntryAt(prevLogIndex) || raftLog.getTermAt(prevLogIndex) != prevLogTerm)) {
-            int lastMatchingIndex = findLastMatchingIndex(prevLogIndex);
-            return new AppendEntryResponseDTO(currentTerm, false, lastMatchingIndex);
+            return new AppendEntryResponseDTO(currentTerm, false);
         }
 
         int index = prevLogIndex + 1;
@@ -77,42 +76,67 @@ public class RaftLogManager {
         }
 
         raftNode.resetElectionTimer();
-        return new AppendEntryResponseDTO(currentTerm, true, raftLog.getLastIndex());
+        return new AppendEntryResponseDTO(currentTerm, true);
     }
 
-    /** 
-     * Replicates log entries to followers. For heartbeats, call with null or empty newEntries.
-     * Does not block; use waitForCommit for client writes.
+    /**
+     * Replicates new log entries and waits for majority commit.
+     * Returns a future that completes when the entry is committed.
      */
-    public void replicateLogToFollowers(List<LogEntry> newEntries) {
-        if (raftNodeState.getRole() != Role.LEADER) return;
-
-        if (newEntries != null && !newEntries.isEmpty()) {
-            newEntries.forEach(raftLog::append);
+    public CompletableFuture<Void> replicateLogToFollowers(List<LogEntry> newEntries) {
+        if (raftNodeState.getRole() != Role.LEADER) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Not leader"));
         }
 
+        if (newEntries == null || newEntries.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        int startIndex = raftLog.getLastIndex() + 1;
+        newEntries.forEach(raftLog::append);
+        int targetIndex = raftLog.getLastIndex();
+
         int currentTerm = raftNodeState.getCurrentTerm();
-        int lastLogIndex = raftLog.getLastIndex();
         if (nextIndex.isEmpty()) {
             initializeIndices();
         }
 
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (String peerUrl : raftNode.getPeerUrls()) {
-            futures.add(replicateToFollower(peerUrl, currentTerm, lastLogIndex));
-        }
+        CompletableFuture<?>[] futures = raftNode.getPeerUrls().stream()
+            .map(peerUrl -> replicateToFollower(peerUrl, currentTerm, targetIndex))
+            .toArray(CompletableFuture[]::new);
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
+        CompletableFuture<Void> majorityFuture = CompletableFuture.runAsync(() -> {
             synchronized (this) {
-                if (raftNodeState.getRole() != Role.LEADER) return;
-                updateCommitIndex(currentTerm);
+                int successes = 1; // Leader counts as 1
+                for (int i = 0; i < futures.length; i++) {
+                    try {
+                        futures[i].join();
+                        String peerUrl = raftNode.getPeerUrls().get(i);
+                        if (matchIndex.getOrDefault(peerUrl, 0) >= targetIndex) {
+                            successes++;
+                        }
+                    } catch (Exception e) {
+                        // Follower failed
+                    }
+                    if (successes >= majority) {
+                        updateCommitIndex(currentTerm);
+                        break;
+                    }
+                }
+                if (successes < majority) {
+                    throw new RuntimeException("Failed to achieve majority commit");
+                }
             }
-        });
+        }, raftNode.getAsyncExecutor());
+
+        return majorityFuture.thenCompose(v -> waitForCommit(targetIndex));
     }
 
-    /** 
+
+
+    /**
      * Waits until the commit index reaches or exceeds the target index.
-     * Returns immediately if already committed.
      */
     public CompletableFuture<Void> waitForCommit(int targetIndex) {
         if (raftLog.getCommitIndex() >= targetIndex) {
@@ -129,7 +153,7 @@ public class RaftLogManager {
             }
         };
         raftLog.addCommitIndexListener(listener);
-        return future.orTimeout(10, TimeUnit.SECONDS); // Fails after 10s
+        return future.orTimeout(10, TimeUnit.SECONDS);
     }
 
     private void updateCommitIndex(int currentTerm) {
@@ -179,8 +203,8 @@ public class RaftLogManager {
                     nextIndex.put(peerUrl, ni + entriesToSend.size());
                     matchIndex.put(peerUrl, ni + entriesToSend.size() - 1);
                 } else {
-                    int lastMatchingIndex = response.getLastMatchingIndex();
-                    nextIndex.put(peerUrl, Math.max(1, lastMatchingIndex + 1));
+                    ni = Math.max(1, ni - 1); // Decrement by 1
+                    nextIndex.put(peerUrl, ni);
                 }
             }
         }, raftNode.getAsyncExecutor());
@@ -192,20 +216,11 @@ public class RaftLogManager {
                 String url = peerUrl + "/raft/appendEntries";
                 ResponseEntity<AppendEntryResponseDTO> response = raftNode.getRestTemplate()
                     .postForEntity(url, dto, AppendEntryResponseDTO.class);
-                return response.getBody() != null ? response.getBody() : new AppendEntryResponseDTO(-1, false, -1);
+                return response.getBody() != null ? response.getBody() : new AppendEntryResponseDTO(-1, false);
             } catch (Exception e) {
-                return new AppendEntryResponseDTO(-1, false, -1);
+                return new AppendEntryResponseDTO(-1, false);
             }
         }, raftNode.getAsyncExecutor());
-    }
-
-    private int findLastMatchingIndex(int prevLogIndex) {
-        for (int i = Math.min(prevLogIndex, raftLog.getLastIndex()); i >= 1; i--) {
-            if (raftLog.containsEntryAt(i)) {
-                return i;
-            }
-        }
-        return 0;
     }
 
     private List<LogEntry> getEntriesFrom(int startIndex, int endIndex) {
