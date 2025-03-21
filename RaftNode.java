@@ -49,18 +49,17 @@ public class RaftNode {
         }
     }
 
-    // Leader-only: Start sending heartbeats to followers (Raft Section 5.2).
     private void startHeartbeats() {
         stopHeartbeats();
         if (state.getRole() != Role.LEADER) return;
-
+    
         heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
             synchronized (this) {
                 if (state.getRole() == Role.LEADER) {
-                    raftLogManager.sendHeartbeatToFollowers();
+                    raftLogManager.replicateLogToFollowers(null); // Heartbeat with no new entries.
                 }
             }
-        }, 0, 100, TimeUnit.MILLISECONDS); // 100ms heartbeat interval.
+        }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
     private void stopHeartbeats() {
