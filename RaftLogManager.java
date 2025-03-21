@@ -31,7 +31,7 @@ public class RaftLogManager {
     }
 
     /**
-     * Handle incoming AppendEntries requests (Follower side).
+     * Handle incoming AppendEntries requests either from /append from /write or heartbeats(Follower side).
      */
     public synchronized AppendEntryResponseDTO handleAppendEntries(AppendEntryDTO dto) {
         int currentTerm = raftNodeState.getCurrentTerm();
@@ -89,7 +89,7 @@ public class RaftLogManager {
      * either throws an exception if a majority cannot be reached,
      * or returns normally once commitIndex is updated.
      */
-    public void replicateLogToFollowers(List<LogEntry> newEntries, long overallTimeoutMs) throws Exception {
+    public synchronized replicateLogToFollowers(List<LogEntry> newEntries, long overallTimeoutMs) throws Exception {
         if (raftNodeState.getRole() != Role.LEADER) {
             throw new IllegalStateException("Not leader");
         }
@@ -105,7 +105,7 @@ public class RaftLogManager {
         }
     
         ExecutorService executor = raftNode.getAsyncExecutor();
-        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
+        int majority = (raftNode.getPeerUrls().size() + 2) / 2;
         AtomicInteger successes = new AtomicInteger(1); // Leader counts itself
         CountDownLatch majorityLatch = new CountDownLatch(majority - 1); // Wait for majority minus leader
     
@@ -197,7 +197,7 @@ public class RaftLogManager {
                 return true;
             } else {
                 // Conflict => decrement nextIndex
-                int backtrack = Math.max(1, ni - 1);
+                int backtrack = Math.max(0, ni - 1);
                 nextIndex.put(peerUrl, backtrack);
                 return false;
             }
@@ -229,11 +229,13 @@ public class RaftLogManager {
      * Return entries from [startIndex..endIndex].
      */
     private List<LogEntry> getEntriesFrom(int startIndex, int endIndex) {
-        List<LogEntry> entries = new ArrayList<>();
-        for (int i = startIndex; i <= endIndex && i <= raftLog.getLastIndex(); i++) {
-            entries.add(raftLog.getEntryAt(i));
+        synchronized (raftLog) {
+            List<LogEntry> entries = new ArrayList<>();
+            for (int i = startIndex; i <= endIndex && i <= raftLog.getLastIndex(); i++) {
+                entries.add(raftLog.getEntryAt(i));
+            }
+            return entries;
         }
-        return entries;
     }
 
     public RaftNodeState getRaftNodeState() {
