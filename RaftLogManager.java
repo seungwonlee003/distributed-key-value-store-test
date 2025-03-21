@@ -83,98 +83,80 @@ public class RaftLogManager {
      * Replicates new log entries and waits for majority commit.
      * Returns a future that completes when the entry is committed.
      */
+    
     public CompletableFuture<Void> replicateLogToFollowers(List<LogEntry> newEntries) {
         if (raftNodeState.getRole() != Role.LEADER) {
             return CompletableFuture.failedFuture(new IllegalStateException("Not leader"));
         }
-
+    
         if (newEntries == null || newEntries.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
-
+    
         int startIndex = raftLog.getLastIndex() + 1;
         newEntries.forEach(raftLog::append);
-        int targetIndex = raftLog.getLastIndex();
-
+        int finalIndexOfNewEntries = raftLog.getLastIndex();  // after appending
         int currentTerm = raftNodeState.getCurrentTerm();
+    
         if (nextIndex.isEmpty()) {
             initializeIndices();
         }
-
-        CompletableFuture<?>[] futures = raftNode.getPeerUrls().stream()
-            .map(peerUrl -> replicateToFollower(peerUrl, currentTerm, targetIndex))
-            .toArray(CompletableFuture[]::new);
-
+    
+        // For each follower, replicate asynchronously (possibly re-trying) ...
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Boolean>[] futures = raftNode.getPeerUrls().stream()
+                .map(peerUrl -> replicateToFollower(peerUrl, currentTerm, finalIndexOfNewEntries))
+                .toArray(CompletableFuture[]::new);
+    
         int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
-        CompletableFuture<Void> majorityFuture = CompletableFuture.runAsync(() -> {
-            synchronized (this) {
-                int successes = 1; // Leader counts as 1
-                for (int i = 0; i < futures.length; i++) {
+    
+        // After we gather all results (or time out), we compute how many succeeded
+        CompletableFuture<Void> majorityFuture = CompletableFuture.allOf(futures)
+            .thenRunAsync(() -> {
+                // Count how many actually returned true
+                int successes = 1; // count leader itself
+                for (CompletableFuture<Boolean> f : futures) {
                     try {
-                        futures[i].join();
-                        String peerUrl = raftNode.getPeerUrls().get(i);
-                        if (matchIndex.getOrDefault(peerUrl, 0) >= targetIndex) {
+                        if (f.get()) {
                             successes++;
                         }
-                    } catch (Exception e) {
-                        // Follower failed
-                    }
-                    if (successes >= majority) {
-                        updateCommitIndex(currentTerm);
-                        break;
+                    } catch (InterruptedException | ExecutionException e) {
+                        // ignore
                     }
                 }
+                // If we don't have a majority at all, you can fail or just skip
                 if (successes < majority) {
                     throw new RuntimeException("Failed to achieve majority commit");
                 }
-            }
-        }, raftNode.getAsyncExecutor());
-
-        return majorityFuture.thenCompose(v -> waitForCommit(targetIndex));
-    }
-
-
-
-    /**
-     * Waits until the commit index reaches or exceeds the target index.
-     */
-    public CompletableFuture<Void> waitForCommit(int targetIndex) {
-        if (raftLog.getCommitIndex() >= targetIndex) {
-            return CompletableFuture.completedFuture(null);
-        }
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        Consumer<Integer> listener = new Consumer<>() {
-            @Override
-            public void accept(Integer newIndex) {
-                if (newIndex >= targetIndex) {
-                    future.complete(null);
-                    raftLog.removeCommitIndexListener(this);
+    
+                // *** Correctly advance commitIndex as per the Raft paper ***
+                int newCommitIndex = raftLog.getCommitIndex();
+                int lastIndex = raftLog.getLastIndex();
+    
+                for (int i = newCommitIndex + 1; i <= lastIndex; i++) {
+                    if (raftLog.getTermAt(i) == currentTerm) {
+                        // Count how many matchIndex >= i
+                        int count = 1; // leader
+                        for (String peer : matchIndex.keySet()) {
+                            if (matchIndex.get(peer) >= i) {
+                                count++;
+                            }
+                        }
+                        if (count >= majority) {
+                            newCommitIndex = i;
+                        }
+                    }
                 }
-            }
-        };
-        raftLog.addCommitIndexListener(listener);
-        return future.orTimeout(10, TimeUnit.SECONDS);
-    }
-
-    private void updateCommitIndex(int currentTerm) {
-        int currentCommitIndex = raftLog.getCommitIndex();
-        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
-        List<Integer> matchIndices = new ArrayList<>();
-        matchIndices.add(raftLog.getLastIndex()); // Leader’s log
-        for (String peerUrl : raftNode.getPeerUrls()) {
-            matchIndices.add(matchIndex.getOrDefault(peerUrl, 0));
-        }
-
-        for (int N = raftLog.getLastIndex(); N > currentCommitIndex; N--) {
-            if (raftLog.getTermAt(N) == currentTerm) {
-                int count = (int) matchIndices.stream().filter(idx -> idx >= N).count();
-                if (count >= majority) {
-                    raftLog.setCommitIndex(N);
-                    break;
+    
+                // Now set commitIndex
+                if (newCommitIndex > raftLog.getCommitIndex()) {
+                    raftLog.setCommitIndex(newCommitIndex);
                 }
-            }
-        }
+            }, raftNode.getAsyncExecutor());
+    
+        return majorityFuture;
     }
+
 
     private CompletableFuture<Void> replicateToFollower(String peerUrl, int currentTerm, int targetIndex) {
         return CompletableFuture.runAsync(() -> {
