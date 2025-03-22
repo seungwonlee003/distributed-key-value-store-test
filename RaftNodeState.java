@@ -11,6 +11,18 @@ public class RaftNodeState {
     private Role currentRole = Role.FOLLOWER;
     private Integer currentLeader = null;  
 
+    private int lastApplied = 0; // Add this field
+
+    // Existing fields and methods...
+
+    public int getLastApplied() {
+        return lastApplied;
+    }
+
+    public void setLastApplied(int lastApplied) {
+        this.lastApplied = lastApplied;
+    }
+
     // Volatile state on candidates:
     private final Set<Integer> votesReceived = new HashSet<>();
 
