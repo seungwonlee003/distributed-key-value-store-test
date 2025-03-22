@@ -50,18 +50,21 @@ public class RaftNode {
     }
 
     private void startHeartbeats() {
-        stopHeartbeats();
-        if (state.getRole() != Role.LEADER) return;
+            stopHeartbeats();
+            if (state.getRole() != Role.LEADER) return;
     
-        heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
-            synchronized (this) {
-                if (state.getRole() == Role.LEADER) {
-                    raftLogManager.replicateLogToFollowers(null); // Heartbeat with no new entries.
+            heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
+                synchronized (this) {
+                    if (state.getRole() == Role.LEADER) {
+                        try {
+                            raftLogManager.replicateLogToFollowers(null, 50); // Short timeout for heartbeats
+                        } catch (Exception e) {
+                            System.err.println("Heartbeat failed: " + e.getMessage());
+                        }
+                    }
                 }
-            }
-        }, 0, 100, TimeUnit.MILLISECONDS);
-    }
-
+            }, 0, 100, TimeUnit.MILLISECONDS);
+        }
     private void stopHeartbeats() {
         if (heartbeatFuture != null && !heartbeatFuture.isDone()) {
             heartbeatFuture.cancel(false);
