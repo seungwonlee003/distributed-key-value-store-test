@@ -16,11 +16,16 @@ public class RaftNode {
     private ScheduledFuture<?> heartbeatFuture;
     private final ExecutorService asyncExecutor = Executors.newFixedThreadPool(4);
     private final RaftLogManager raftLogManager;
-
+    private StateMachine stateMachine = new StateMachine();
+    
     public RaftNode(RaftNodeState state, List<String> peerUrls, RaftLogManager raftLogManager) {
         this.state = state;
         this.peerUrls = peerUrls;
         this.raftLogManager = raftLogManager;
+    }
+
+    public InMemoryStateMachine getStateMachine() {
+        return stateMachine;
     }
 
     public RaftNodeState getState() {
