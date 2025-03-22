@@ -81,7 +81,7 @@ public class ElectionManager {
             for (String peerUrl : raftNode.getPeerUrls()) {
                 CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
                     .supplyAsync(() -> requestVote(currentTerm, state.getNodeId(), 
-                                                   state.getLastLogIndex(), state.getLastLogTerm(), peerUrl))
+                                                   state.getLastLogIndex(), state.getLastLogTerm(), peerUrl), executor)
                     .orTimeout(1000, TimeUnit.MILLISECONDS)
                     .exceptionally(throwable -> new VoteResponseDTO(currentTerm, false));
                 voteFutures.add(voteFuture);
