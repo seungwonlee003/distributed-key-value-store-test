@@ -13,7 +13,7 @@ public class RaftController {
         this.raftLogManager = raftLogManager;
     }
 
-    @PostMapping("/vote")
+    @PostMapping("/requestVote")
     public ResponseEntity<VoteResponseDTO> vote(@RequestBody RequestVoteDTO requestVoteDTO) {
         VoteResponseDTO response = raftNode.handleVoteRequest(requestVoteDTO);
         return ResponseEntity.ok(response);
