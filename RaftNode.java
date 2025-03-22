@@ -50,21 +50,22 @@ public class RaftNode {
     }
 
     private void startHeartbeats() {
-            stopHeartbeats();
-            if (state.getRole() != Role.LEADER) return;
-    
-            heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
-                synchronized (this) {
-                    if (state.getRole() == Role.LEADER) {
-                        try {
-                            raftLogManager.replicateLogToFollowers(null, 50); // Short timeout for heartbeats
-                        } catch (Exception e) {
-                            System.err.println("Heartbeat failed: " + e.getMessage());
-                        }
+        stopHeartbeats();
+        if (state.getRole() != Role.LEADER) return;
+
+        heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
+            synchronized (this) {
+                if (state.getRole() == Role.LEADER) {
+                    try {
+                        raftLogManager.replicateLogToFollowers(null);
+                    } catch (Exception e) {
+                        System.err.println("Heartbeat failed: " + e.getMessage());
                     }
                 }
-            }, 0, 100, TimeUnit.MILLISECONDS);
-        }
+            }
+        }, 0, 100, TimeUnit.MILLISECONDS);
+    }
+    
     private void stopHeartbeats() {
         if (heartbeatFuture != null && !heartbeatFuture.isDone()) {
             heartbeatFuture.cancel(false);
@@ -72,7 +73,6 @@ public class RaftNode {
         }
     }
 
-    // Handles vote requests from candidates (Raft Section 5.2).
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
         int requestTerm = requestVote.getTerm();
         int candidateId = requestVote.getCandidateId();
@@ -113,7 +113,6 @@ public class RaftNode {
         return new VoteResponseDTO(currentTerm, true);
     }
 
-    // Resets election timer with a random timeout (Raft Section 5.2).
     public void resetElectionTimer() {
         cancelElectionTimerIfRunning();
         int timeout = electionTimeoutMin + random.nextInt(electionTimeoutMax - electionTimeoutMin);
@@ -136,15 +135,14 @@ public class RaftNode {
     
             int currentTerm = state.getCurrentTerm();
             List<CompletableFuture<VoteResponseDTO>> voteFutures = new ArrayList<>();
-            ExecutorService executor = raftNode.getAsyncExecutor(); // Added executor from raftNode
-            long voteTimeoutMs = 500; // Example timeout (adjust as needed)
+            ExecutorService executor = raftNode.getAsyncExecutor();
     
             // Submit vote requests asynchronously with per-task timeout
             for (String peerUrl : peerUrls) {
                 CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
                     .supplyAsync(() -> requestVote(currentTerm, state.getNodeId(), 
                                                         state.getLastLogIndex(), state.getLastLogTerm(), peerUrl))
-                    .orTimeout(voteTimeoutMs, TimeUnit.MILLISECONDS) // Per-task timeout
+                    .orTimeout(1000, TimeUnit.MILLISECONDS) // Per-task timeout
                     .exceptionally(throwable -> {
                         // Timeout or failure results in no vote
                         return new VoteResponseDTO(false, currentTerm); // Return a "no vote" response
@@ -156,7 +154,7 @@ public class RaftNode {
             CompletableFuture.allOf(voteFutures.toArray(new CompletableFuture[0])).thenRun(() -> {
                 synchronized (this) {
                     if (state.getRole() != Role.CANDIDATE || state.getCurrentTerm() != currentTerm) {
-                        return; // Term or role changed; abort.
+                        return;
                     }
                     int voteCount = 1; // Self-vote
                     for (CompletableFuture<VoteResponseDTO> future : voteFutures) {
@@ -173,7 +171,7 @@ public class RaftNode {
                     if (voteCount >= majority) {
                         becomeLeader();
                     } else {
-                        resetElectionTimer(); // Retry election
+                        resetElectionTimer(); 
                     }
                 }
             }).exceptionally(ex -> {
@@ -187,7 +185,6 @@ public class RaftNode {
         int term, int candidateId, int lastLogIndex, int lastLogTerm, String peerUrl
     ) {
         try {
-            // Build the URL for the peer's /vote endpoint
             String url = peerUrl + "/raft/vote";
     
             RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
@@ -199,7 +196,6 @@ public class RaftNode {
                     ? response.getBody()
                     : new VoteResponseDTO(term, false);
     
-            // Check if the returned term is higher than our current term
             synchronized (this) {
                 if (body.getTerm() > state.getCurrentTerm()) {
                     state.setCurrentTerm(body.getTerm());
@@ -216,19 +212,7 @@ public class RaftNode {
             return new VoteResponseDTO(term, false);
         }
     }
-    public VoteResponseDTO requestVote(int term, int candidateId, int lastLogIndex, int lastLogTerm, String peerUrl) {
-        try {
-            String url = peerUrl + "/raft/vote";
-            RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
-            ResponseEntity<VoteResponseDTO> response =
-                    restTemplate.postForEntity(url, dto, VoteResponseDTO.class);
-            return (response.getBody() != null) ? response.getBody() : new VoteResponseDTO(term, false);
-        } catch (Exception e) {
-            return new VoteResponseDTO(term, false);
-        }
-    }
 
-    // Transitions node to leader state (Raft Section 5.2).
     private void becomeLeader() {
         state.setRole(Role.LEADER);
         System.out.println("Node " + state.getNodeId() + " became leader for term " + state.getCurrentTerm());
