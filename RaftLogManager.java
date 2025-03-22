@@ -89,7 +89,7 @@ public class RaftLogManager {
      * either throws an exception if a majority cannot be reached,
      * or returns normally once commitIndex is updated.
      */
-    public synchronized replicateLogToFollowers(List<LogEntry> newEntries, long overallTimeoutMs) throws Exception {
+    public synchronized void replicateLogToFollowers(List<LogEntry> newEntries, long overallTimeoutMs) throws Exception {
         if (raftNodeState.getRole() != Role.LEADER) {
             throw new IllegalStateException("Not leader");
         }
@@ -105,7 +105,8 @@ public class RaftLogManager {
         }
     
         ExecutorService executor = raftNode.getAsyncExecutor();
-        int majority = (raftNode.getPeerUrls().size() + 2) / 2;
+        int majority = (peerUrls.size() + 1) / 2 + 1;
+
         AtomicInteger successes = new AtomicInteger(1); // Leader counts itself
         CountDownLatch majorityLatch = new CountDownLatch(majority - 1); // Wait for majority minus leader
     
@@ -119,7 +120,6 @@ public class RaftLogManager {
                     }
                 }
             }, executor)
-            .orTimeout(overallTimeoutMs, TimeUnit.MILLISECONDS) // Per-task timeout
             .exceptionally(throwable -> {
                 // Timeout or error treated as failure; do nothing
                 return null;
@@ -149,66 +149,52 @@ public class RaftLogManager {
         }
     }
 
-    /**
-     * A blocking helper that replicates entries [ni..targetIndex] to a single follower
-     * with a synchronous RestTemplate call. Returns true on success.
-     *
-     * In a full Raft system, you'd keep retrying in a heartbeat loop until the follower catches up.
-     * Here we do a single attempt (plus we decrement nextIndex if it fails).
-     */
     private boolean replicateToFollower(
             String peerUrl, int currentTerm, int targetIndex) {
 
-        synchronized (this) {
-            if (raftNodeState.getRole() != Role.LEADER) {
-                return false;
-            }
+        if (raftNodeState.getRole() != Role.LEADER) {
+            return false;
+        }
 
-            int ni = nextIndex.get(peerUrl);
-            int prevLogIndex = Math.max(0, ni - 1);
-            int prevLogTerm = (prevLogIndex > 0) ? raftLog.getTermAt(prevLogIndex) : 0;
-            List<LogEntry> entriesToSend = getEntriesFrom(ni, targetIndex);
+        int ni = nextIndex.get(peerUrl);
+        int prevLogIndex = Math.max(0, ni - 1);
+        int prevLogTerm = (prevLogIndex > 0) ? raftLog.getTermAt(prevLogIndex) : 0;
+        List<LogEntry> entriesToSend = getEntriesFrom(ni, targetIndex);
 
-            AppendEntryDTO dto = new AppendEntryDTO(
-                currentTerm,
-                raftNodeState.getNodeId(),
-                prevLogIndex,
-                prevLogTerm,
-                entriesToSend,
-                raftLog.getCommitIndex()
-            );
+        AppendEntryDTO dto = new AppendEntryDTO(
+            currentTerm,
+            raftNodeState.getNodeId(),
+            prevLogIndex,
+            prevLogTerm,
+            entriesToSend,
+            raftLog.getCommitIndex()
+        );
 
-            // Synchronous call with built-in timeouts in the RestTemplate
-            AppendEntryResponseDTO response = sendAppendEntries(peerUrl, dto);
+        // Synchronous call with built-in timeouts in the RestTemplate
+        AppendEntryResponseDTO response = sendAppendEntries(peerUrl, dto);
 
-            if (response.getTerm() > currentTerm) {
-                // Found a higher term, step down
-                raftNodeState.setCurrentTerm(response.getTerm());
-                raftNodeState.setRole(Role.FOLLOWER);
-                raftNodeState.setVotedFor(null);
-                raftNode.resetElectionTimer();
-                return false;
-            }
+        if (response.getTerm() > currentTerm) {
+            // Found a higher term, step down
+            raftNodeState.setCurrentTerm(response.getTerm());
+            raftNodeState.setRole(Role.FOLLOWER);
+            raftNodeState.setVotedFor(null);
+            raftNode.resetElectionTimer();
+            return false;
+        }
 
-            if (response.isSuccess()) {
-                // Update nextIndex/matchIndex
-                nextIndex.put(peerUrl, ni + entriesToSend.size());
-                matchIndex.put(peerUrl, ni + entriesToSend.size() - 1);
-                return true;
-            } else {
-                // Conflict => decrement nextIndex
-                int backtrack = Math.max(0, ni - 1);
-                nextIndex.put(peerUrl, backtrack);
-                return false;
-            }
+        if (response.isSuccess()) {
+            // Update nextIndex/matchIndex
+            nextIndex.put(peerUrl, ni + entriesToSend.size());
+            matchIndex.put(peerUrl, ni + entriesToSend.size() - 1);
+            return true;
+        } else {
+            // Conflict => decrement nextIndex
+            int backtrack = Math.max(0, ni - 1);
+            nextIndex.put(peerUrl, backtrack);
+            return false;
         }
     }
 
-    /**
-     * Fully synchronous call to the follower's /appendEntries endpoint.
-     * We rely on the RestTemplate's internal timeouts (connect/read) 
-     * and the 'singleCallTimeoutMs' can be further enforced in the template if needed.
-     */
     private AppendEntryResponseDTO sendAppendEntries(String peerUrl, AppendEntryDTO dto) {
         try {
             String url = peerUrl + "/raft/appendEntries";
@@ -225,9 +211,6 @@ public class RaftLogManager {
         }
     }
 
-    /**
-     * Return entries from [startIndex..endIndex].
-     */
     private List<LogEntry> getEntriesFrom(int startIndex, int endIndex) {
         synchronized (raftLog) {
             List<LogEntry> entries = new ArrayList<>();
