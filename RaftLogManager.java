@@ -30,9 +30,6 @@ public class RaftLogManager {
         }
     }
 
-    /**
-     * Handle incoming AppendEntries requests either from /append from /write or heartbeats(Follower side).
-     */
     public synchronized AppendEntryResponseDTO handleAppendEntries(AppendEntryDTO dto) {
         int currentTerm = raftNodeState.getCurrentTerm();
         int leaderTerm = dto.getTerm();
@@ -84,12 +81,7 @@ public class RaftLogManager {
         return new AppendEntryResponseDTO(currentTerm, true);
     }
 
-    /**
-     * Blocking method that replicates the new entries to followers and 
-     * either throws an exception if a majority cannot be reached,
-     * or returns normally once commitIndex is updated.
-     */
-    public synchronized void replicateLogToFollowers(List<LogEntry> newEntries, long overallTimeoutMs) throws Exception {
+    public synchronized void replicateLogToFollowers(List<LogEntry> newEntries) throws Exception {
         if (raftNodeState.getRole() != Role.LEADER) {
             throw new IllegalStateException("Not leader");
         }
@@ -127,13 +119,12 @@ public class RaftLogManager {
             .collect(Collectors.toList());
     
         // Wait for majority or timeout
-        boolean majorityAchieved = majorityLatch.await(overallTimeoutMs, TimeUnit.MILLISECONDS);
+        boolean majorityAchieved = majorityLatch.await(1000, TimeUnit.MILLISECONDS);
     
         if (!majorityAchieved || successes.get() < majority) {
             throw new RuntimeException("Failed to achieve majority commit");
         }
     
-        // Commit logic (same as original)
         int newCommitIndex = raftLog.getCommitIndex();
         for (int i = newCommitIndex + 1; i <= finalIndexOfNewEntries; i++) {
             if (raftLog.getTermAt(i) == currentTerm) {
