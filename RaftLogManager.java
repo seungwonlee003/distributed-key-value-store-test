@@ -6,6 +6,7 @@ public class RaftLogManager {
     private final RaftNodeState raftNodeState;
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
+    private final StateMachine stateMachine;
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
@@ -75,6 +76,7 @@ public class RaftLogManager {
         if (leaderCommit > raftLog.getCommitIndex()) {
             int lastNewEntryIndex = prevLogIndex + entries.size();
             raftLog.setCommitIndex(Math.min(leaderCommit, lastNewEntryIndex));
+            applyCommittedEntries(); 
         }
 
         raftNode.resetElectionTimer();
@@ -137,6 +139,7 @@ public class RaftLogManager {
         }
         if (newCommitIndex > raftLog.getCommitIndex()) {
             raftLog.setCommitIndex(newCommitIndex);
+            applyCommittedEntries(); 
         }
     }
 
@@ -214,5 +217,15 @@ public class RaftLogManager {
 
     public RaftNodeState getRaftNodeState() {
         return this.raftNodeState;
+    }
+    
+    private void applyCommittedEntries() {
+        int commitIndex = raftLog.getCommitIndex();
+        int lastApplied = raftNodeState.getLastApplied();
+        for (int i = lastApplied + 1; i <= commitIndex; i++) {
+            LogEntry entry = raftLog.getEntryAt(i);
+            raftNode.getStateMachine().apply(entry);
+            raftNodeState.setLastApplied(i);
+        }
     }
 }
