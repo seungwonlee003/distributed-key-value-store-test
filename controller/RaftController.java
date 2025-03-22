@@ -7,6 +7,7 @@ public class RaftController {
 
     private final RaftNode raftNode;
     private final RaftLogManager raftLogManager;
+    private final ElectionManager electionManager;
 
     public RaftController(RaftNode raftNode, RaftLogManager raftLogManager) {
         this.raftNode = raftNode;
@@ -15,7 +16,7 @@ public class RaftController {
 
     @PostMapping("/requestVote")
     public ResponseEntity<VoteResponseDTO> vote(@RequestBody RequestVoteDTO requestVoteDTO) {
-        VoteResponseDTO response = raftNode.handleVoteRequest(requestVoteDTO);
+        VoteResponseDTO response = electionManager.handleVoteRequest(requestVoteDTO);
         return ResponseEntity.ok(response);
     }
 
@@ -34,14 +35,9 @@ public class RaftController {
 
         LogEntry entry = new LogEntry(raftLogManager.getRaftNodeState().getCurrentTerm(), data);
 
-        // We choose some "overall" replication timeout for the entire set of new entries
-        long replicationTimeoutMs = 2000;
-
         try {
             // Now it's a blocking call. If it fails, we know replication didn't succeed
-            raftLogManager.replicateLogToFollowers(Collections.singletonList(entry), replicationTimeoutMs);
-
-            // If we reach here, majority replication succeeded and commitIndex advanced
+            raftLogManager.replicateLogToFollowers(Collections.singletonList(entry));
             return ResponseEntity.ok("Write committed");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Write failed: " + e.getMessage());
