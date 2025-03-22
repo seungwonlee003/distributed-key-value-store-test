@@ -119,7 +119,7 @@ public class ElectionManager {
 
     private VoteResponseDTO requestVote(int term, int candidateId, int lastLogIndex, int lastLogTerm, String peerUrl) {
         try {
-            String url = peerUrl + "/raft/vote";
+            String url = peerUrl + "/raft/requestVote";
             RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
             ResponseEntity<VoteResponseDTO> response = raftNode.getRestTemplate().postForEntity(url, dto, VoteResponseDTO.class);
             VoteResponseDTO body = response.getBody() != null ? response.getBody() : new VoteResponseDTO(term, false);
