@@ -82,7 +82,6 @@ public class RaftLogManager {
         raftNode.resetElectionTimer();
         return new AppendEntryResponseDTO(currentTerm, true);
     }
-
     public synchronized void replicateLogToFollowers(List<LogEntry> newEntries) throws Exception {
         if (raftNodeState.getRole() != Role.LEADER) {
             throw new IllegalStateException("Not leader");
@@ -99,7 +98,7 @@ public class RaftLogManager {
         }
     
         ExecutorService executor = raftNode.getAsyncExecutor();
-        int majority = (peerUrls.size() + 1) / 2 + 1;
+        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
 
         AtomicInteger successes = new AtomicInteger(1); // Leader counts itself
         CountDownLatch majorityLatch = new CountDownLatch(majority - 1); // Wait for majority minus leader
@@ -127,7 +126,14 @@ public class RaftLogManager {
             throw new RuntimeException("Failed to achieve majority commit");
         }
     
+        updateCommitIndex(finalIndexOfNewEntries);
+    }
+
+    private void updateCommitIndex(int finalIndexOfNewEntries) {
+        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
         int newCommitIndex = raftLog.getCommitIndex();
+        int currentTerm = raftNodeState.getCurrentTerm();
+
         for (int i = newCommitIndex + 1; i <= finalIndexOfNewEntries; i++) {
             if (raftLog.getTermAt(i) == currentTerm) {
                 int count = 1; // Leader
@@ -137,9 +143,10 @@ public class RaftLogManager {
                 if (count >= majority) newCommitIndex = i;
             }
         }
+
         if (newCommitIndex > raftLog.getCommitIndex()) {
             raftLog.setCommitIndex(newCommitIndex);
-            applyCommittedEntries(); 
+            applyCommittedEntries();
         }
     }
 
@@ -153,7 +160,7 @@ public class RaftLogManager {
         int ni = nextIndex.get(peerUrl);
         int prevLogIndex = Math.max(0, ni - 1);
         int prevLogTerm = (prevLogIndex > 0) ? raftLog.getTermAt(prevLogIndex) : 0;
-        List<LogEntry> entriesToSend = getEntriesFrom(ni, targetIndex);
+        List<LogEntry> entriesToSend = raftLog.getEntriesFrom(ni, targetIndex);
 
         AppendEntryDTO dto = new AppendEntryDTO(
             currentTerm,
@@ -202,16 +209,6 @@ public class RaftLogManager {
             }
         } catch (Exception e) {
             return new AppendEntryResponseDTO(-1, false);
-        }
-    }
-
-    private List<LogEntry> getEntriesFrom(int startIndex, int endIndex) {
-        synchronized (raftLog) {
-            List<LogEntry> entries = new ArrayList<>();
-            for (int i = startIndex; i <= endIndex && i <= raftLog.getLastIndex(); i++) {
-                entries.add(raftLog.getEntryAt(i));
-            }
-            return entries;
         }
     }
 
