@@ -20,7 +20,6 @@ public class RaftController {
         return ResponseEntity.ok(response);
     }
 
-    // Combined AppendEntries endpoint used both for heartbeats (empty entries) and log replication.
     @PostMapping("/appendEntries")
     public ResponseEntity<AppendEntryResponseDTO> appendEntries(@RequestBody AppendEntryDTO dto) {
         AppendEntryResponseDTO response = raftLogManager.handleAppendEntries(dto);
@@ -36,7 +35,6 @@ public class RaftController {
         LogEntry entry = new LogEntry(raftLogManager.getRaftNodeState().getCurrentTerm(), data);
 
         try {
-            // Now it's a blocking call. If it fails, we know replication didn't succeed
             raftLogManager.replicateLogToFollowers(Collections.singletonList(entry));
             return ResponseEntity.ok("Write committed");
         } catch (Exception e) {
