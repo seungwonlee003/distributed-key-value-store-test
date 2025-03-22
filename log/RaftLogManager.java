@@ -39,7 +39,6 @@ public class RaftLogManager {
         List<LogEntry> entries = dto.getEntries();
         int leaderCommit = dto.getLeaderCommit();
 
-        // If the leader's term is behind, reject
         if (leaderTerm < currentTerm) {
             return new AppendEntryResponseDTO(currentTerm, false);
         }
@@ -49,7 +48,8 @@ public class RaftLogManager {
             raftNodeState.setCurrentTerm(leaderTerm);
             raftNodeState.setRole(Role.FOLLOWER);
             raftNodeState.setVotedFor(null);
-            raftNode.resetElectionTimer();
+            heartbeatManager.stopHeartBeats();
+            heartbeatManager.resetElectionTimer();
             currentTerm = leaderTerm;
         }
 
@@ -79,9 +79,10 @@ public class RaftLogManager {
             applyCommittedEntries(); 
         }
 
-        raftNode.resetElectionTimer();
+        heartbeatManager.resetElectionTimer();
         return new AppendEntryResponseDTO(currentTerm, true);
     }
+    
     public synchronized void replicateLogToFollowers(List<LogEntry> newEntries) throws Exception {
         if (raftNodeState.getRole() != Role.LEADER) {
             throw new IllegalStateException("Not leader");
@@ -171,7 +172,6 @@ public class RaftLogManager {
             raftLog.getCommitIndex()
         );
 
-        // Synchronous call with built-in timeouts in the RestTemplate
         AppendEntryResponseDTO response = sendAppendEntries(peerUrl, dto);
 
         if (response.getTerm() > currentTerm) {
@@ -179,7 +179,7 @@ public class RaftLogManager {
             raftNodeState.setCurrentTerm(response.getTerm());
             raftNodeState.setRole(Role.FOLLOWER);
             raftNodeState.setVotedFor(null);
-            raftNode.resetElectionTimer();
+            heartbeatManager.resetElectionTimer();
             return false;
         }
 
