@@ -89,6 +89,7 @@ public class RaftNode {
             state.setCurrentTerm(requestTerm);
             state.setRole(Role.FOLLOWER);
             state.setVotedFor(null);
+            stopHeartbeats();
             resetElectionTimer();
             currentTerm = requestTerm;
         }
@@ -121,81 +122,107 @@ public class RaftNode {
             electionFuture.cancel(false);
         }
     }
-
-    // Initiates an election when the timer expires (Raft Section 5.2).
+    
     private void startElection() {
         synchronized (this) {
             if (state.getRole() == Role.LEADER) return;
-
+    
             state.setRole(Role.CANDIDATE);
             state.incrementTerm();
             state.setVotedFor(state.getNodeId());
-
+    
             int currentTerm = state.getCurrentTerm();
             List<CompletableFuture<VoteResponseDTO>> voteFutures = new ArrayList<>();
-
+            ExecutorService executor = raftNode.getAsyncExecutor(); // Added executor from raftNode
+            long voteTimeoutMs = 500; // Example timeout (adjust as needed)
+    
+            // Submit vote requests asynchronously with per-task timeout
             for (String peerUrl : peerUrls) {
-                voteFutures.add(requestVoteAsync(currentTerm, state.getNodeId(), 
-                                                 state.getLastLogIndex(), state.getLastLogTerm(), peerUrl));
+                CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
+                    .supplyAsync(() -> requestVote(currentTerm, state.getNodeId(), 
+                                                        state.getLastLogIndex(), state.getLastLogTerm(), peerUrl))
+                    .orTimeout(voteTimeoutMs, TimeUnit.MILLISECONDS) // Per-task timeout
+                    .exceptionally(throwable -> {
+                        // Timeout or failure results in no vote
+                        return new VoteResponseDTO(false, currentTerm); // Return a "no vote" response
+                    });
+                voteFutures.add(voteFuture);
             }
-
+    
+            // Wait for all vote requests to complete, then process results
             CompletableFuture.allOf(voteFutures.toArray(new CompletableFuture[0])).thenRun(() -> {
                 synchronized (this) {
                     if (state.getRole() != Role.CANDIDATE || state.getCurrentTerm() != currentTerm) {
                         return; // Term or role changed; abort.
                     }
-                    int voteCount = 1; // Self-vote.
+                    int voteCount = 1; // Self-vote
                     for (CompletableFuture<VoteResponseDTO> future : voteFutures) {
                         try {
-                            VoteResponseDTO response = future.get();
-                            if (response.isVoteGranted()) {
+                            VoteResponseDTO response = future.get(); // Safe to call get() since allOf ensures completion
+                            if (response != null && response.isVoteGranted()) {
                                 voteCount++;
                             }
                         } catch (Exception e) {
-                            // No vote on failure.
+                            // Handle any unexpected errors (e.g., interrupted execution)
                         }
                     }
                     int majority = (peerUrls.size() + 1) / 2 + 1;
                     if (voteCount >= majority) {
                         becomeLeader();
                     } else {
-                        resetElectionTimer(); // Retry election.
+                        resetElectionTimer(); // Retry election
                     }
                 }
             }).exceptionally(ex -> {
-                System.err.println("Election failed: " + ex.getMessage());
+                System.err.println("Election failed unexpectedly: " + ex.getMessage());
                 return null;
             });
         }
     }
 
-    // Requests a vote from a peer asynchronously (Raft Section 5.2).
-    private CompletableFuture<VoteResponseDTO> requestVoteAsync(int term, int candidateId, 
-                                                                int lastLogIndex, int lastLogTerm, 
-                                                                String peerUrl) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                String url = peerUrl + "/raft/vote";
-                RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
-                ResponseEntity<VoteResponseDTO> response = 
-                        restTemplate.postForEntity(url, dto, VoteResponseDTO.class);
-                VoteResponseDTO body = response.getBody();
-                if (body == null) return new VoteResponseDTO(term, false);
-
-                synchronized (this) {
-                    if (body.getTerm() > state.getCurrentTerm()) {
-                        state.setCurrentTerm(body.getTerm());
-                        state.setRole(Role.FOLLOWER);
-                        state.setVotedFor(null);
-                        resetElectionTimer();
-                    }
+    public VoteResponseDTO requestVote(
+        int term, int candidateId, int lastLogIndex, int lastLogTerm, String peerUrl
+    ) {
+        try {
+            // Build the URL for the peer's /vote endpoint
+            String url = peerUrl + "/raft/vote";
+    
+            RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
+    
+            ResponseEntity<VoteResponseDTO> response =
+                    restTemplate.postForEntity(url, dto, VoteResponseDTO.class);
+    
+            VoteResponseDTO body = (response.getBody() != null)
+                    ? response.getBody()
+                    : new VoteResponseDTO(term, false);
+    
+            // Check if the returned term is higher than our current term
+            synchronized (this) {
+                if (body.getTerm() > state.getCurrentTerm()) {
+                    state.setCurrentTerm(body.getTerm());
+                    state.setRole(Role.FOLLOWER);
+                    state.setVotedFor(null);
+                    stopHeartbeats();  // If you want to ensure no leftover heartbeats
+                    resetElectionTimer();
                 }
-                return body;
-            } catch (Exception e) {
-                return new VoteResponseDTO(term, false);
             }
-        }, asyncExecutor)
-        .completeOnTimeout(new VoteResponseDTO(term, false), 100, TimeUnit.MILLISECONDS);
+            return body;
+    
+        } catch (Exception e) {
+            // On error, we consider the vote not granted
+            return new VoteResponseDTO(term, false);
+        }
+    }
+    public VoteResponseDTO requestVote(int term, int candidateId, int lastLogIndex, int lastLogTerm, String peerUrl) {
+        try {
+            String url = peerUrl + "/raft/vote";
+            RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
+            ResponseEntity<VoteResponseDTO> response =
+                    restTemplate.postForEntity(url, dto, VoteResponseDTO.class);
+            return (response.getBody() != null) ? response.getBody() : new VoteResponseDTO(term, false);
+        } catch (Exception e) {
+            return new VoteResponseDTO(term, false);
+        }
     }
 
     // Transitions node to leader state (Raft Section 5.2).
