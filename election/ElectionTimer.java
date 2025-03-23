@@ -6,8 +6,8 @@ public class ElectionTimer {
     private final ElectionManager electionManager;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final Random random = new Random();
-    private final int electionTimeoutMin = 3000; // in milliseconds
-    private final int electionTimeoutMax = 5000; // in milliseconds
+    private final int electionTimeoutMin = 3000; 
+    private final int electionTimeoutMax = 5000;
     private ScheduledFuture<?> electionFuture;
 
     public ElectionTimer(RaftNode raftNode, ElectionManager electionManager) {
