@@ -7,6 +7,7 @@ public class RaftLogManager {
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
     private final StateMachine stateMachine;
+    private final HeartManager heartManager;
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
@@ -14,6 +15,8 @@ public class RaftLogManager {
         this.raftNodeState = raftNode.getState();
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
+        this.stateMachine = new StateMachine();
+        this.heartManager = new HeartManager();
     }
 
     @PostConstruct
@@ -60,6 +63,20 @@ public class RaftLogManager {
         }
 
         // Append new entries, delete conflicts
+        appendEntries(prevLogIndex, entries);
+
+        // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+        if (leaderCommit > raftLog.getCommitIndex()) {
+            int lastNewEntryIndex = prevLogIndex + entries.size();
+            raftLog.setCommitIndex(Math.min(leaderCommit, lastNewEntryIndex));
+            applyCommittedEntries(); 
+        }
+
+        heartbeatManager.resetElectionTimer();
+        return new AppendEntryResponseDTO(currentTerm, true);
+    }
+
+    private void appendEntries(int prevLogIndex, List<LogEntry> entries) {
         int index = prevLogIndex + 1;
         for (LogEntry entry : entries) {
             if (raftLog.containsEntryAt(index) && raftLog.getTermAt(index) != entry.getTerm()) {
@@ -71,16 +88,6 @@ public class RaftLogManager {
             }
             index++;
         }
-
-        // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
-        if (leaderCommit > raftLog.getCommitIndex()) {
-            int lastNewEntryIndex = prevLogIndex + entries.size();
-            raftLog.setCommitIndex(Math.min(leaderCommit, lastNewEntryIndex));
-            applyCommittedEntries(); 
-        }
-
-        heartbeatManager.resetElectionTimer();
-        return new AppendEntryResponseDTO(currentTerm, true);
     }
     
     public synchronized void replicateLogToFollowers(List<LogEntry> newEntries) throws Exception {
@@ -127,10 +134,10 @@ public class RaftLogManager {
             throw new RuntimeException("Failed to achieve majority commit");
         }
     
-        updateCommitIndex(finalIndexOfNewEntries);
+        commitLogEntries(finalIndexOfNewEntries);
     }
 
-    private void updateCommitIndex(int finalIndexOfNewEntries) {
+    private void commitLogEntries(int finalIndexOfNewEntries) {
         int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
         int newCommitIndex = raftLog.getCommitIndex();
         int currentTerm = raftNodeState.getCurrentTerm();
