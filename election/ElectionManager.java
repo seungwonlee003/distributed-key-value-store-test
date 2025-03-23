@@ -5,11 +5,10 @@ import java.util.concurrent.*;
 
 public class ElectionManager {
     private final RaftNode raftNode;
-    private final RaftLog raftLog;
     private final ElectionTimer electionTimer;
     private final HeartbeatManager heartbeatManager;
 
-    public ElectionManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer, HeartbeatManager heartbeatManager) {
+    public ElectionManager(RaftNode raftNode, ElectionTimer electionTimer, HeartbeatManager heartbeatManager) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
         this.electionTimer = electionTimer;
@@ -135,6 +134,10 @@ public class ElectionManager {
 
     public void cancelElectionTimer() {
         electionTimer.cancel();
+    }
+
+    public raftLogManager raftLogManager(){
+        return raftNode.raftLogManager();
     }
 
 }
