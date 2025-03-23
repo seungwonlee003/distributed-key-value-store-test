@@ -49,7 +49,7 @@ public class RaftNode {
         heartbeatManager.startHeartbeats();
     }
 
-    public void becomeFollower(int newTerm) {
+    public synchronized void becomeFollower(int newTerm) {
         state.setCurrentTerm(newTerm);
         state.setRole(Role.FOLLOWER);
         state.setVotedFor(null);
