@@ -13,6 +13,7 @@ public class ElectionTimer {
     public ElectionTimer(RaftNode raftNode, ElectionManager electionManager) {
         this.raftNode = raftNode;
         this.electionManager = electionManager;
+        this.heartbeatManager = heartbeatManager;
     }
 
     public synchronized void reset() {
