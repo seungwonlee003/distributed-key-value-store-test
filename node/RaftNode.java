@@ -8,21 +8,26 @@ import java.util.concurrent.Executors;
 public class RaftNode {
     private final RaftNodeState state;
     private final List<String> peerUrls;
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ExecutorService asyncExecutor = Executors.newFixedThreadPool(4);
+    private final RestTemplate restTemplate;
+    private final ExecutorService asyncExecutor;
     private final RaftLogManager raftLogManager;
     private final StateMachine stateMachine;
     private final ElectionManager electionManager;
     private final HeartbeatManager heartbeatManager;
 
-    public RaftNode(RaftNodeState state, List<String> peerUrls, RaftLogManager raftLogManager, StateMachine stateMachine) {
+    @Autowired
+    public RaftNode(RaftNodeState state, List<String> peerUrls, RestTemplate restTemplate, ExecutorService asyncExecutor, RaftLogManager raftLogManager, 
+                    StateMachine stateMachine, ElectionManager electionManager, HeartbeatManager heartbeatManager) {
         this.state = state;
         this.peerUrls = peerUrls;
+        this.restTemplate = restTemplate;
+        this.asyncExecutor = asyncExecutor;
         this.raftLogManager = raftLogManager;
-        this.stateMachine = stateMachine != null ? stateMachine : new InMemoryStateMachine(); // Default
-        this.electionManager = new ElectionManager(this);
-        this.heartbeatManager = new HeartbeatManager(this);
+        this.stateMachine = stateMachine;
+        this.electionManager = electionManager;
+        this.heartbeatManager = heartbeatManager;
     }
+
 
     private void becomeLeader() {
         state.setRole(Role.LEADER);
