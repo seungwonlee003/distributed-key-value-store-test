@@ -21,6 +21,7 @@ public class RaftNodeState {
         this.lastApplied = lastApplied;
     }
 
+    // get nodeId from the application.properties
     public RaftNodeState(int nodeId) {
         this.nodeId = nodeId;
     }
