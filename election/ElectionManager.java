@@ -6,15 +6,17 @@ import java.util.concurrent.*;
 public class ElectionManager {
     private final RaftNode raftNode;
     private final RaftLog raftLog;
+    private final ElectionTimer electionTimer;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final Random random = new Random();
     private final int electionTimeoutMin = 150;
     private final int electionTimeoutMax = 300;
     private ScheduledFuture<?> electionFuture;
 
-    public ElectionManager(RaftNode raftNode, RaftLog raftLog) {
+    public ElectionManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
+        this.electionTimer = electionTimer;
     }
 
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
@@ -53,18 +55,6 @@ public class ElectionManager {
         state.setVotedFor(candidateId);
         resetElectionTimer();
         return new VoteResponseDTO(currentTerm, true);
-    }
-
-    public void resetElectionTimer() {
-        cancelElectionTimerIfRunning();
-        int timeout = electionTimeoutMin + random.nextInt(electionTimeoutMax - electionTimeoutMin);
-        electionFuture = scheduler.schedule(this::startElection, timeout, TimeUnit.MILLISECONDS);
-    }
-
-    private void cancelElectionTimerIfRunning() {
-        if (electionFuture != null && !electionFuture.isDone()) {
-            electionFuture.cancel(false);
-        }
     }
 
     private void startElection() {
@@ -141,4 +131,13 @@ public class ElectionManager {
             return new VoteResponseDTO(term, false);
         }
     }
+
+    public void resetElectionTimer() {
+        electionTimer.reset();
+    }
+
+    public void cancelElectionTimer() {
+        electionTimer.cancel();
+    }
+
 }
