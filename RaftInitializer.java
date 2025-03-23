@@ -9,13 +9,9 @@ import java.util.List;
 public class RaftInitializer {
 
     private final RaftNode raftNode;
-    private final ElectionManager electionManager;
-    private final RaftLogManager raftLogManager;
 
-    public RaftInitializer(RaftNode raftNode, ElectionManager electionManager, RaftLogManager raftLogManager) {
+    public RaftInitializer(RaftNode raftNode) {
         this.raftNode = raftNode;
-        this.electionManager = electionManager;
-        this.raftLogManager = raftLogManager;
     }
 
     @PostConstruct
@@ -46,7 +42,7 @@ public class RaftInitializer {
         // When the node later becomes leader, its transition logic should call initializeIndices().
 
         // Start the election timer so that this node will trigger an election if no heartbeats arrive.
-        electionManager.resetElectionTimer();
+        raftNode.resetElectionTimer();
         System.out.println("Election timer started.");
     }
 }
