@@ -8,11 +8,6 @@ public class ElectionManager {
     private final RaftLog raftLog;
     private final ElectionTimer electionTimer;
     private final HeartbeatManager heartbeatManager;
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private final Random random = new Random();
-    private final int electionTimeoutMin = 150;
-    private final int electionTimeoutMax = 300;
-    private ScheduledFuture<?> electionFuture;
 
     public ElectionManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer, HeartbeatManager heartbeatManager) {
         this.raftNode = raftNode;
@@ -39,7 +34,7 @@ public class ElectionManager {
             state.setCurrentTerm(requestTerm);
             state.setRole(Role.FOLLOWER);
             state.setVotedFor(null);
-            raftNode.getRaftLogManager().stopHeartbeats(); // Delegate to RaftLogManager if needed
+            stopHeartbeats()
             resetElectionTimer();
             currentTerm = requestTerm;
         }
