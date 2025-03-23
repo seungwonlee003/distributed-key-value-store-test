@@ -26,7 +26,7 @@ public class ElectionManager {
 
         if (requestTerm > currentTerm) {
             raftNode.becomeFollower(requestTerm);
-            currentTerm = requestTerm; // Update local term after facade call
+            currentTerm = requestTerm; 
         }
 
         Integer votedFor = raftNode.getState().getVotedFor(); // Minimal state access for votedFor
@@ -42,7 +42,7 @@ public class ElectionManager {
             return new VoteResponseDTO(currentTerm, false);
         }
 
-        raftNode.getState().setVotedFor(candidateId); // Direct state access here, see note below
+        raftNode.getState().setVotedFor(candidateId); 
         raftNode.resetElectionTimer();
         return new VoteResponseDTO(currentTerm, true);
     }
