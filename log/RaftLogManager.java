@@ -16,14 +16,12 @@ public class RaftLogManager {
     private final RaftLog raftLog;
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
-    private final StateMachine stateMachine;
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
-        this.stateMachine = raftNode.getStateMachine(); // Use facade to get state machine
     }
 
     public void initializeIndices() {
