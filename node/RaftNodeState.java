@@ -6,14 +6,12 @@ public class RaftNodeState {
     private int currentTerm = 0;  
     private Integer votedFor = null; 
     
-    // Server identity and leadership info:
-    private final int nodeId;       // Unique identifier for this node
+    private final int nodeId;       
+    // start with a role of follower
     private Role currentRole = Role.FOLLOWER;
     private Integer currentLeader = null;  
 
     private int lastApplied = 0; // Add this field
-
-    // Existing fields and methods...
 
     public int getLastApplied() {
         return lastApplied;
@@ -23,10 +21,6 @@ public class RaftNodeState {
         this.lastApplied = lastApplied;
     }
 
-    // Volatile state on candidates:
-    private final Set<Integer> votesReceived = new HashSet<>();
-
-    // Constructor: requires a unique nodeId
     public RaftNodeState(int nodeId) {
         this.nodeId = nodeId;
     }
