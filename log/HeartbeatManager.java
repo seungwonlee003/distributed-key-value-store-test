@@ -12,7 +12,10 @@ public class HeartbeatManager {
     public void startHeartbeats() {
         stopHeartbeats();
         RaftNodeState state = raftNode.getState();
-        if (state.getRole() != Role.LEADER) return;
+        if (state.getRole() != Role.LEADER){
+            stopHeartbeats();
+            return;
+        }
 
         heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
             synchronized (this) {
