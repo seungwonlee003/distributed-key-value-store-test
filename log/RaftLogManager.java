@@ -68,18 +68,6 @@ public class RaftLogManager {
 
     private void appendEntries(int prevLogIndex, List<LogEntry> entries) {
         int index = prevLogIndex + 1;
-        for (LogEntry entry : entries) {
-            if (raftLog.containsEntryAt(index) && raftLog.getTermAt(index) != entry.getTerm()) {
-                raftLog.deleteFrom(index);
-            }
-            if (!raftLog.containsEntryAt(index)) {
-                raftLog.append(entry);
-            }
-            index++;
-        }
-    }
-    private void appendEntries(int prevLogIndex, List<LogEntry> entries) {
-        int index = prevLogIndex + 1;
         if (!entries.isEmpty()) {
             if (raftLog.containsEntryAt(index) && raftLog.getTermAt(index) != entries.get(0).getTerm()) {
                 raftLog.deleteFrom(index);
