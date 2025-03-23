@@ -2,17 +2,21 @@ import java.util.concurrent.*;
 
 public class HeartbeatManager {
     private final RaftNode raftNode;
+    private final ElectionManager electionManager;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private ScheduledFuture<?> heartbeatFuture;
 
-    public HeartbeatManager(RaftNode raftNode) {
+    public HeartbeatManager(RaftNode raftNode, ElectionManager electionManager) {
         this.raftNode = raftNode;
+        this.electionManager = electionManager;
     }
 
     public void startHeartbeats() {
         stopHeartbeats();
+        electionManager.cancelElectionTimerIfRunning();
         RaftNodeState state = raftNode.getState();
         if (state.getRole() != Role.LEADER){
+            electionManager.resetElectionTimer();
             stopHeartbeats();
             return;
         }
