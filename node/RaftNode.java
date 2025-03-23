@@ -32,7 +32,16 @@ public class RaftNode {
         state.setRole(Role.LEADER);
         System.out.println("Node " + state.getNodeId() + " became leader for term " + state.getCurrentTerm());
         raftLogManager.initializeIndices();
-        heartbeatManager.startHeartbeats();
+        getHeartbeatManager().startHeartbeats();
+    }
+
+    public void becomeFollower(int newTerm) {
+        RaftNodeState state = getState();
+        state.setCurrentTerm(newTerm);
+        state.setRole(Role.FOLLOWER);
+        state.setVotedFor(null);
+        getHeartbeatManager().stopHeartbeats();
+        getElectionManager().resetElectionTimer();
     }
 
     // Getters
