@@ -1,7 +1,9 @@
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.*;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
 
 public class ElectionManager {
     private final RaftNode raftNode;
@@ -32,9 +34,11 @@ public class ElectionManager {
         if (votedFor != null && !votedFor.equals(candidateId)) {
             return new VoteResponseDTO(currentTerm, false);
         }
-        int localLastTerm = raftLog.getLastTerm();
-        int localLastIndex = raftLog.getLastIndex();
-        if (candidateLastTerm < localLastTerm || 
+
+        // Retrieve log details via the RaftNode facade.
+        int localLastTerm = raftNode.getRaftLog().getLastTerm();
+        int localLastIndex = raftNode.getRaftLog().getLastIndex();
+        if (candidateLastTerm < localLastTerm ||
             (candidateLastTerm == localLastTerm && candidateLastIndex < localLastIndex)) {
             return new VoteResponseDTO(currentTerm, false);
         }
@@ -60,7 +64,7 @@ public class ElectionManager {
             for (String peerUrl : raftNode.getPeerUrls()) {
                 CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
                     .supplyAsync(() -> requestVote(currentTerm, state.getNodeId(), 
-                                                   raftLog.getLastIndex(), raftLog.getLastTerm(), peerUrl), executor)
+                                                   raftNode.getRaftLog().getLastIndex(), raftNode.getRaftLog().getLastTerm(), peerUrl), executor)
                     .orTimeout(1000, TimeUnit.MILLISECONDS)
                     .exceptionally(throwable -> new VoteResponseDTO(currentTerm, false));
                 voteFutures.add(voteFuture);
@@ -79,12 +83,12 @@ public class ElectionManager {
                                 voteCount++;
                             }
                         } catch (Exception e) {
-                            // Ignore
+                            // Ignore failures
                         }
                     }
                     int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
                     if (voteCount >= majority) {
-                        raftNode.becomeLeader(); // Delegate back to RaftNode
+                        raftNode.becomeLeader(); // Delegate transition via RaftNode
                     } else {
                         resetElectionTimer();
                     }
@@ -109,7 +113,7 @@ public class ElectionManager {
                     state.setCurrentTerm(body.getTerm());
                     state.setRole(Role.FOLLOWER);
                     state.setVotedFor(null);
-                    stopHeartbeats(); 
+                    stopHeartbeats();
                     resetElectionTimer();
                 }
             }
@@ -119,19 +123,15 @@ public class ElectionManager {
         }
     }
 
-    public void stopHeartbeats(){
-        raftNode.getHeartbeatManager.stopHeartbeats();
+    public void stopHeartbeats() {
+        raftNode.getHeartbeatManager().stopHeartbeats();
     }
 
     public void resetElectionTimer() {
-        raftNode.getElectionTimer.reset();
+        raftNode.getElectionTimer().reset();
     }
 
     public void cancelElectionTimer() {
-        raftNode.getElectionTimer.cancel();
-    }
-
-    public RaftLog raftLog(){
-        return raftNode.getRaftLog;
+        raftNode.getElectionTimer().cancel();
     }
 }
