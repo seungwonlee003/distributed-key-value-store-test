@@ -3,15 +3,17 @@ public class RaftLogManager {
 
     private final RaftNode raftNode;
     private final RaftLog raftLog;
+    private final ElectionTimer electionTimer;
     private final RaftNodeState raftNodeState;
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
     private final StateMachine stateMachine;
     private final HeartManager heartManager;
 
-    public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
+    public RaftLogManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
+        this.electionTimer = electionTimer;
         this.raftNodeState = raftNode.getState();
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
@@ -45,7 +47,7 @@ public class RaftLogManager {
             raftNodeState.setRole(Role.FOLLOWER);
             raftNodeState.setVotedFor(null);
             heartbeatManager.stopHeartBeats();
-            heartbeatManager.resetElectionTimer();
+            electionTimer.resetElectionTimer();
             currentTerm = leaderTerm;
         }
 
@@ -179,7 +181,7 @@ public class RaftLogManager {
             raftNodeState.setCurrentTerm(response.getTerm());
             raftNodeState.setRole(Role.FOLLOWER);
             raftNodeState.setVotedFor(null);
-            heartbeatManager.resetElectionTimer();
+            electionTimer.resetElectionTimer();
             return false;
         }
 
