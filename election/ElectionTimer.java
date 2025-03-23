@@ -27,6 +27,7 @@ public class ElectionTimer {
     public synchronized void cancel() {
         if (electionFuture != null && !electionFuture.isDone()) {
             electionFuture.cancel(false);
+            electionFuture = null;
         }
     }
 }
