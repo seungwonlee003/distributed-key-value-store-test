@@ -40,8 +40,8 @@ public class RaftNode {
         state.setCurrentTerm(newTerm);
         state.setRole(Role.FOLLOWER);
         state.setVotedFor(null);
-        getHeartbeatManager().stopHeartbeats();
-        getElectionManager().resetElectionTimer();
+        heartbeatManager.stopHeartbeats();
+        electionManager.resetElectionTimer();
     }
 
     // Getters
