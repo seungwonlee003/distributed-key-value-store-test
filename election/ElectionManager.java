@@ -5,14 +5,9 @@ import java.util.concurrent.*;
 
 public class ElectionManager {
     private final RaftNode raftNode;
-    private final ElectionTimer electionTimer;
-    private final HeartbeatManager heartbeatManager;
 
-    public ElectionManager(RaftNode raftNode, ElectionTimer electionTimer, HeartbeatManager heartbeatManager) {
+    public ElectionManager(RaftNode raftNode) {
         this.raftNode = raftNode;
-        this.raftLog = raftLog;
-        this.electionTimer = electionTimer;
-        this.heartbeatManager = heartbeatManager;
     }
 
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
@@ -125,19 +120,18 @@ public class ElectionManager {
     }
 
     public void stopHeartbeats(){
-        heartbeatManager.stopHeartbeats();
+        raftNode.getHeartbeatManager.stopHeartbeats();
     }
 
     public void resetElectionTimer() {
-        electionTimer.reset();
+        raftNode.getElectionTimer.reset();
     }
 
     public void cancelElectionTimer() {
-        electionTimer.cancel();
+        raftNode.getElectionTimer.cancel();
     }
 
-    public raftLogManager raftLogManager(){
-        return raftNode.raftLogManager();
+    public RaftLog raftLog(){
+        return raftNode.getRaftLog;
     }
-
 }
