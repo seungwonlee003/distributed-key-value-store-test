@@ -41,4 +41,5 @@ public class RaftController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Write failed: " + e.getMessage());
         }
     }
+    
 }
