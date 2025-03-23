@@ -7,16 +7,18 @@ public class ElectionManager {
     private final RaftNode raftNode;
     private final RaftLog raftLog;
     private final ElectionTimer electionTimer;
+    private final HeartbeatManager heartbeatManager;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final Random random = new Random();
     private final int electionTimeoutMin = 150;
     private final int electionTimeoutMax = 300;
     private ScheduledFuture<?> electionFuture;
 
-    public ElectionManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer) {
+    public ElectionManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer, HeartbeatManager heartbeatManager) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
         this.electionTimer = electionTimer;
+        this.heartbeatManager = heartbeatManager;
     }
 
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
@@ -122,7 +124,7 @@ public class ElectionManager {
                     state.setCurrentTerm(body.getTerm());
                     state.setRole(Role.FOLLOWER);
                     state.setVotedFor(null);
-                    raftNode.getRaftLogManager().stopHeartbeats(); // Ensure consistency
+                    stopHeartbeats(); 
                     resetElectionTimer();
                 }
             }
@@ -130,6 +132,10 @@ public class ElectionManager {
         } catch (Exception e) {
             return new VoteResponseDTO(term, false);
         }
+    }
+
+    public void stopHeartbeats(){
+        heartbeatManager.stopHeartbeats();
     }
 
     public void resetElectionTimer() {
