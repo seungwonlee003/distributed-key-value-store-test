@@ -3,7 +3,7 @@ import java.util.concurrent.*;
 public class HeartbeatManager {
     private final RaftNode raftNode;
     private final ElectionManager electionManager;
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> heartbeatFuture;
 
     public HeartbeatManager(RaftNode raftNode, ElectionManager electionManager) {
