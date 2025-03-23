@@ -19,7 +19,7 @@ public class RaftLogManager {
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
-        this.raftLog = raftNode;
+        this.raftLog = raftLog;
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
     }
@@ -78,6 +78,15 @@ public class RaftLogManager {
             index++;
         }
     }
+    private void appendEntries(int prevLogIndex, List<LogEntry> entries) {
+        int index = prevLogIndex + 1;
+        if (!entries.isEmpty()) {
+            if (raftLog.containsEntryAt(index) && raftLog.getTermAt(index) != entries.get(0).getTerm()) {
+                raftLog.deleteFrom(index);
+            }
+            raftLog.appendAll(entries);
+        }
+    }
 
     public synchronized void replicateLogToFollowers(List<LogEntry> newEntries) throws Exception {
         if (raftNode.getRole() != Role.LEADER) {
@@ -97,7 +106,7 @@ public class RaftLogManager {
         ExecutorService executor = raftNode.getAsyncExecutor();
         int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
 
-        AtomicInteger successes = new AtomicInteger(1); // Leader counts itself
+        AtomicInteger successes = new AtomicInteger(1);
         CountDownLatch majorityLatch = new CountDownLatch(majority - 1);
 
         List<CompletableFuture<Void>> futures = raftNode.getPeerUrls().stream()
@@ -121,24 +130,37 @@ public class RaftLogManager {
 
     private void commitLogEntries(int finalIndexOfNewEntries) {
         int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
-        int newCommitIndex = raftLog.getCommitIndex();
         int currentTerm = raftNode.getCurrentTerm();
-
-        for (int i = newCommitIndex + 1; i <= finalIndexOfNewEntries; i++) {
-            if (raftLog.getTermAt(i) == currentTerm) {
-                int count = 1; // Leader
-                for (String peer : matchIndex.keySet()) {
-                    if (matchIndex.get(peer) >= i) count++;
+        int newCommitIndex = raftLog.getCommitIndex();
+    
+        // Track the highest index replicated to a majority (any term)
+        int maxReplicated = raftLog.getCommitIndex();
+        for (int peerIndex : matchIndex.values()) {
+            if (peerIndex > maxReplicated) maxReplicated = peerIndex;
+        }
+    
+        // Find the largest N where N > commitIndex, and a majority of matchIndex[i] ≥ N
+        for (int i = maxReplicated; i > raftLog.getCommitIndex(); i--) {
+            int count = 1; // Leader
+            for (int peerIndex : matchIndex.values()) {
+                if (peerIndex >= i) count++;
+            }
+            if (count >= majority) {
+                // Ensure at least one entry in the current term is included (Raft §5.4.2)
+                if (raftLog.getTermAt(i) == currentTerm) {
+                    newCommitIndex = i;
+                    break;
                 }
-                if (count >= majority) newCommitIndex = i;
             }
         }
-
+    
         if (newCommitIndex > raftLog.getCommitIndex()) {
             raftLog.setCommitIndex(newCommitIndex);
             applyCommittedEntries();
         }
     }
+    
+
 
     private boolean replicateToFollower(String peerUrl, int currentTerm, int targetIndex) {
         if (raftNode.getRole() != Role.LEADER) {
@@ -192,9 +214,14 @@ public class RaftLogManager {
         int commitIndex = raftLog.getCommitIndex();
         int lastApplied = raftNode.getLastApplied();
         for (int i = lastApplied + 1; i <= commitIndex; i++) {
-            LogEntry entry = raftLog.getEntryAt(i);
-            raftNode.getStateMachine().apply(entry);
-            raftNode.setLastApplied(i);
+           try {
+                LogEntry entry = raftLog.getEntryAt(i);
+                raftNode.getStateMachine().apply(entry);
+                raftNode.setLastApplied(i);
+            } catch (Exception e) {
+                System.out.println("State machine apply failed at index " + i + ": " + e.getMessage());
+                break; // FIX: #7 (prevent gap in lastApplied)
+            }
         }
     }
 }
