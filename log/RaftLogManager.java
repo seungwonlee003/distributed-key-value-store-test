@@ -19,7 +19,7 @@ public class RaftLogManager {
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
-        this.raftLog = raftLog;
+        this.raftLog = raftNode.getRaftLog();
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
     }
