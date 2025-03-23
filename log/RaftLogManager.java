@@ -148,8 +148,6 @@ public class RaftLogManager {
         }
     }
     
-
-
     private boolean replicateToFollower(String peerUrl, int currentTerm, int targetIndex) {
         if (raftNode.getRole() != Role.LEADER) {
             return false;
