@@ -28,7 +28,6 @@ public class RaftNode {
         this.heartbeatManager = heartbeatManager;
     }
 
-
     private void becomeLeader() {
         state.setRole(Role.LEADER);
         System.out.println("Node " + state.getNodeId() + " became leader for term " + state.getCurrentTerm());
