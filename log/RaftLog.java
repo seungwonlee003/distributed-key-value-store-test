@@ -3,11 +3,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
-/**
- * A class to manage the log of entries in a Raft consensus system.
- * It handles appending, deleting, and querying log entries, as well as tracking the commit index
- * and notifying listeners when the commit index changes.
- */
 public class RaftLog {
     private final List<LogEntry> logEntries = new ArrayList<>();
     private int commitIndex = 0;
