@@ -17,7 +17,7 @@ public class RaftLogManager {
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
 
-    public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
+    public RaftLogManager(RaftNode raftNode) {
         this.raftNode = raftNode;
         this.raftLog = raftNode.getRaftLog();
         this.nextIndex = new ConcurrentHashMap<>();
