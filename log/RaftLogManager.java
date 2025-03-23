@@ -8,17 +8,17 @@ public class RaftLogManager {
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
     private final StateMachine stateMachine;
-    private final HeartManager heartManager;
+    private final HeartbeatManager heartbeatManager;
 
-    public RaftLogManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer) {
+    public RaftLogManager(RaftNode raftNode, RaftLog raftLog, ElectionTimer electionTimer, HeartbeatManager heartbeatManager) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
         this.electionTimer = electionTimer;
         this.raftNodeState = raftNode.getState();
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
-        this.stateMachine = new StateMachine();
-        this.heartManager = new HeartManager();
+        this.stateMachine = new InMemoryStorageImpl();
+        this.heartbeatManager = new HeartbeatManager();
     }
 
     private void initializeIndices() {
@@ -46,8 +46,8 @@ public class RaftLogManager {
             raftNodeState.setCurrentTerm(leaderTerm);
             raftNodeState.setRole(Role.FOLLOWER);
             raftNodeState.setVotedFor(null);
-            heartbeatManager.stopHeartBeats();
-            electionTimer.resetElectionTimer();
+            stopHeartBeats();
+            resetElectionTimer();
             currentTerm = leaderTerm;
         }
 
@@ -67,7 +67,7 @@ public class RaftLogManager {
             applyCommittedEntries(); 
         }
 
-        heartbeatManager.resetElectionTimer();
+        resetElectionTimer();
         return new AppendEntryResponseDTO(currentTerm, true);
     }
 
@@ -181,7 +181,7 @@ public class RaftLogManager {
             raftNodeState.setCurrentTerm(response.getTerm());
             raftNodeState.setRole(Role.FOLLOWER);
             raftNodeState.setVotedFor(null);
-            electionTimer.resetElectionTimer();
+            resetElectionTimer();
             return false;
         }
 
@@ -226,5 +226,17 @@ public class RaftLogManager {
             raftNode.getStateMachine().apply(entry);
             raftNodeState.setLastApplied(i);
         }
+    }
+
+    public void resetElectionTimer() {
+        electionTimer.reset();
+    }
+
+    public void cancelElectionTimer() {
+        electionTimer.cancel();
+    }
+
+    public void stopHeartbeats(){
+        heartbeatManager.stopHeartbeats();
     }
 }
