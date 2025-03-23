@@ -19,13 +19,6 @@ public class RaftLogManager {
         this.heartManager = new HeartManager();
     }
 
-    @PostConstruct
-    public void initialize() {
-        if (raftNodeState.getRole() == Role.LEADER) {
-            initializeIndices();
-        }
-    }
-
     private void initializeIndices() {
         int lastLogIndex = raftLog.getLastIndex();
         for (String peerUrl : raftNode.getPeerUrls()) {
