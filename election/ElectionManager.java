@@ -5,14 +5,16 @@ import java.util.concurrent.*;
 
 public class ElectionManager {
     private final RaftNode raftNode;
+    private final RaftLog raftLog;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final Random random = new Random();
     private final int electionTimeoutMin = 150;
     private final int electionTimeoutMax = 300;
     private ScheduledFuture<?> electionFuture;
 
-    public ElectionManager(RaftNode raftNode) {
+    public ElectionManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
+        this.raftLog = raftLog;
     }
 
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
@@ -41,8 +43,8 @@ public class ElectionManager {
         if (votedFor != null && !votedFor.equals(candidateId)) {
             return new VoteResponseDTO(currentTerm, false);
         }
-        int localLastTerm = state.getLastLogTerm();
-        int localLastIndex = state.getLastLogIndex();
+        int localLastTerm = raftLog.getLastTerm();
+        int localLastIndex = raftLog.getLastIndex();
         if (candidateLastTerm < localLastTerm || 
             (candidateLastTerm == localLastTerm && candidateLastIndex < localLastIndex)) {
             return new VoteResponseDTO(currentTerm, false);
@@ -81,7 +83,7 @@ public class ElectionManager {
             for (String peerUrl : raftNode.getPeerUrls()) {
                 CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
                     .supplyAsync(() -> requestVote(currentTerm, state.getNodeId(), 
-                                                   state.getLastLogIndex(), state.getLastLogTerm(), peerUrl), executor)
+                                                   raftLog.getLastIndex(), raftLog.getLastTerm(), peerUrl), executor)
                     .orTimeout(1000, TimeUnit.MILLISECONDS)
                     .exceptionally(throwable -> new VoteResponseDTO(currentTerm, false));
                 voteFutures.add(voteFuture);
