@@ -17,7 +17,6 @@ public class HeartbeatManager {
         RaftNodeState state = raftNode.getState();
         if (state.getRole() != Role.LEADER){
             electionManager.resetElectionTimer();
-            stopHeartbeats();
             return;
         }
 
