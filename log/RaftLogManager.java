@@ -82,9 +82,9 @@ public class RaftLogManager {
         }
 
         if (newEntries != null && !newEntries.isEmpty()) {
-            newEntries.forEach(raftLog::append);
+            raftLog.appendAll(newEntries);
         }
-
+        
         int finalIndexOfNewEntries = raftLog.getLastIndex();
         int currentTerm = raftNode.getCurrentTerm();
         if (nextIndex.isEmpty()) {
