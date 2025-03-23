@@ -30,19 +30,48 @@ public class RaftController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/write")
-    public ResponseEntity<String> write(@RequestBody String data) {
-        if (raftNode.getRole() != Role.LEADER) {
+    @PostMapping("/insert")
+    public ResponseEntity<String> insert(@RequestParam String key, @RequestParam String value) {
+        if (node.getRole() != Role.LEADER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
 
-        LogEntry entry = new LogEntry(raftNode.getCurrentTerm(), data);
-
+        LogEntry entry = new LogEntry(node.getCurrentTerm(), key, value, LogEntry.Operation.INSERT);
         try {
-            raftLogManager.replicateLogToFollowers(Collections.singletonList(entry));
-            return ResponseEntity.ok("Write committed");
+            logManager.replicateLogToFollowers(Collections.singletonList(entry));
+            return ResponseEntity.ok("Insert committed");
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Write failed: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Insert failed: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/update")
+    public ResponseEntity<String> update(@RequestParam String key, @RequestParam String value) {
+        if (node.getRole() != Role.LEADER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
+        }
+
+        LogEntry entry = new LogEntry(node.getCurrentTerm(), key, value, LogEntry.Operation.UPDATE);
+        try {
+            logManager.replicateLogToFollowers(Collections.singletonList(entry));
+            return ResponseEntity.ok("Update committed");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Update failed: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/delete")
+    public ResponseEntity<String> delete(@RequestParam String key) {
+        if (node.getRole() != Role.LEADER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
+        }
+
+        LogEntry entry = new LogEntry(node.getCurrentTerm(), key, null, LogEntry.Operation.DELETE);
+        try {
+            logManager.replicateLogToFollowers(Collections.singletonList(entry));
+            return ResponseEntity.ok("Delete committed");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Delete failed: " + e.getMessage());
         }
     }
 }
