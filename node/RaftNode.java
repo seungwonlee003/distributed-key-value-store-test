@@ -54,23 +54,15 @@ public class RaftNode {
         state.setRole(Role.FOLLOWER);
         state.setVotedFor(null);
         heartbeatManager.stopHeartbeats();
-        electionManager.resetElectionTimer();
+        electionTimer.reset();
     }
 
-// Facade methods for election and heartbeat control
+// Control Method
     public void resetElectionTimer() {
         electionTimer.reset();
     }
 
-    public void cancelElectionTimer() {
-        electionTimer.cancel();
-    }
-
-    public void stopHeartbeats() {
-        heartbeatManager.stopHeartbeats();
-    }
-
-    // Facade getters (minimal exposure)
+    // Facade Getters
     public int getCurrentTerm() {
         return state.getCurrentTerm();
     }
@@ -109,5 +101,10 @@ public class RaftNode {
 
     public StateMachine getStateMachine() {
         return stateMachine;
+    }
+
+    // Temporary Direct State Access (required by ElectionManager)
+    public RaftNodeState getState() {
+        return state;
     }
 }
