@@ -42,7 +42,7 @@ public class RaftNode {
         this.electionTimer = electionTimer;
     }
 
-    private void becomeLeader() {
+    private synchronized void becomeLeader() {
         state.setRole(Role.LEADER);
         System.out.println("Node " + state.getNodeId() + " became leader for term " + state.getCurrentTerm());
         raftLogManager.initializeIndices();
