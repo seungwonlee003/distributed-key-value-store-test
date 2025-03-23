@@ -30,7 +30,7 @@ public class HeartbeatManager {
                     }
                 }
             }
-        }, 0, 100, TimeUnit.MILLISECONDS);
+        }, 0, 1000, TimeUnit.MILLISECONDS);
     }
 
     public void stopHeartbeats() {
