@@ -20,6 +20,12 @@ public class RaftLog {
         logEntries.add(entry);
     }
 
+    public void appendAll(List<LogEntry> entries) {
+        if (entries != null && !entries.isEmpty()) {
+            logEntries.addAll(entries); // Bulk append all entries
+        }
+    }
+
     public boolean containsEntryAt(int index) {
         return index >= 1 && index < logEntries.size();
     }
