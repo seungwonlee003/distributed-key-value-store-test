@@ -31,11 +31,7 @@ public class ElectionManager {
         }
 
         if (requestTerm > currentTerm) {
-            state.setCurrentTerm(requestTerm);
-            state.setRole(Role.FOLLOWER);
-            state.setVotedFor(null);
-            stopHeartbeats()
-            resetElectionTimer();
+            raftNode.becomeFollower(requestTerm);
             currentTerm = requestTerm;
         }
 
