@@ -43,11 +43,7 @@ public class RaftLogManager {
 
         // If leaderTerm is newer, convert to follower
         if (leaderTerm > currentTerm) {
-            raftNodeState.setCurrentTerm(leaderTerm);
-            raftNodeState.setRole(Role.FOLLOWER);
-            raftNodeState.setVotedFor(null);
-            stopHeartBeats();
-            resetElectionTimer();
+            raftNode.becomeFollower(leaderTerm);
             currentTerm = leaderTerm;
         }
 
