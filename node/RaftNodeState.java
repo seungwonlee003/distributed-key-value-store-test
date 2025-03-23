@@ -62,8 +62,4 @@ public class RaftNodeState {
     public void setCurrentLeader(Integer currentLeader) {
         this.currentLeader = currentLeader;
     }
-
-    public Set<Integer> getVotesReceived() {
-        return votesReceived;
-    }
 }
