@@ -1,7 +1,6 @@
 public enum ConsistencyLevel {
     DEFAULT,
-    READ_YOUR_WRITES,
-    LEADER_LOCAL,
+    LINEARIZABLE, // read_your_writes
     EVENTUAL;
 
     public static ConsistencyLevel fromString(String value) {
