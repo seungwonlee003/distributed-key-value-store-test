@@ -77,6 +77,7 @@ public class RaftLogManager {
     }
 
     public synchronized void replicateLogToFollowers(List<LogEntry> newEntries) throws Exception {
+        // stop and heartbeat and start again at the end? because two threads could interfere.
         if (raftNode.getRole() != Role.LEADER) {
             throw new IllegalStateException("Not leader");
         }
