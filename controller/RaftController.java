@@ -30,13 +30,27 @@ public class RaftController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/get")
+    public ResponseEntity<String> get(@RequestParam String key, 
+                                      @RequestParam(defaultValue = "DEFAULT") String consistency) {
+        try {
+            ConsistencyLevel level = ConsistencyLevel.fromString(consistency);
+            String value = consistencyService.read(key, level);
+            return value != null ? ResponseEntity.ok(value) : ResponseEntity.notFound().build();
+        } catch (ConsistencyException e) {
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     @PostMapping("/insert")
     public ResponseEntity<String> insert(@RequestParam String key, @RequestParam String value) {
-        if (node.getRole() != Role.LEADER) {
+        if (raftNode.getRole() != Role.LEADER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
 
-        LogEntry entry = new LogEntry(node.getCurrentTerm(), key, value, LogEntry.Operation.INSERT);
+        LogEntry entry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.INSERT);
         try {
             logManager.replicateLogToFollowers(Collections.singletonList(entry));
             return ResponseEntity.ok("Insert committed");
@@ -47,11 +61,11 @@ public class RaftController {
 
     @PostMapping("/update")
     public ResponseEntity<String> update(@RequestParam String key, @RequestParam String value) {
-        if (node.getRole() != Role.LEADER) {
+        if (raftNode.getRole() != Role.LEADER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
 
-        LogEntry entry = new LogEntry(node.getCurrentTerm(), key, value, LogEntry.Operation.UPDATE);
+        LogEntry entry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.UPDATE);
         try {
             logManager.replicateLogToFollowers(Collections.singletonList(entry));
             return ResponseEntity.ok("Update committed");
@@ -62,11 +76,11 @@ public class RaftController {
 
     @PostMapping("/delete")
     public ResponseEntity<String> delete(@RequestParam String key) {
-        if (node.getRole() != Role.LEADER) {
+        if (raftNode.getRole() != Role.LEADER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
 
-        LogEntry entry = new LogEntry(node.getCurrentTerm(), key, null, LogEntry.Operation.DELETE);
+        LogEntry entry = new LogEntry(raftNode.getCurrentTerm(), key, null, LogEntry.Operation.DELETE);
         try {
             logManager.replicateLogToFollowers(Collections.singletonList(entry));
             return ResponseEntity.ok("Delete committed");
