@@ -21,12 +21,9 @@ public class ConsistencyService {
             case DEFAULT:
                 return kvStore.get(key);
             
-            case READ_YOUR_WRITES:  
+            case LINEARIZABLE:  
                 return;
             
-            case LEADER_LOCAL:
-                return;
-      
             case EVENTUAL:
                 return kvStore.get(key);
 
