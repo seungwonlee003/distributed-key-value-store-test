@@ -22,7 +22,15 @@ public class ConsistencyService {
                 return kvStore.get(key);
             
             case LINEARIZABLE:  
-                return;
+                // confirm its leadership
+                // ensures lastApplied == commitIndex
+                // read the value from KVStore
+
+                raftLogManager.replicateLogToFollowers(null);
+                if(raftNode.getRole() != Role.LEADER){
+                    throw new IllegalStateException("Leadership lost");
+                }
+                return kvStore.get(key))
             
             case EVENTUAL:
                 return kvStore.get(key);
