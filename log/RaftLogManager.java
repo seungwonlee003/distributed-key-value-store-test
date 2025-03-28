@@ -41,7 +41,7 @@ public class RaftLogManager {
         int entryIndex = raftLog.getLastIndex();
     
         long start = System.currentTimeMillis();
-        long timeoutMillis = 3000; // timeout to prevent infinite loop
+        long timeoutMillis = 3000; 
 
         // wait for at most 5 seconds for the client's write to be acknowledged by the majority
         while (raftNode.getRole() == Role.LEADER) {
@@ -53,14 +53,14 @@ public class RaftLogManager {
             }
     
             try {
-                Thread.sleep(1000); // Polling interval
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
             }
         }
     
-        return false; // Leadership lost
+        return false; 
     }
     
     public void startLogReplication() {
@@ -129,7 +129,7 @@ public class RaftLogManager {
                 return false;
             }
         } catch (Exception e) {
-            return false; // Retry on network failure
+            return false; 
         }
     }
 
@@ -149,7 +149,7 @@ public class RaftLogManager {
         int currentTerm = raftNode.getCurrentTerm();
     
         for (int i = raftLog.getLastIndex(); i > raftLog.getCommitIndex(); i--) {
-            int count = 1; // Leader
+            int count = 1;
             for (int index : matchIndex.values()) {
                 if (index >= i) count++;
             }
