@@ -11,14 +11,14 @@ public class HeartbeatManager {
         this.electionManager = electionManager;
     }
     
-    public void startHeartbeats() 
+    public void startHeartbeats(){
         stopHeartbeats();
         electionManager.cancelElectionTimerIfRunning();
         heartbeatFuture = heartbeatExecutor.scheduleAtFixedRate(() -> {
             if (raftNode.getRole() == Role.LEADER) {
                 raftNode.startLogReplication(); // Empty entries act as heartbeat
             }
-        }, 0, 150, TimeUnit.MILLISECONDS); // 150ms heartbeat interval
+        }, 0, 1000, TimeUnit.MILLISECONDS); // 150ms heartbeat interval
     }
 
     public void stopHeartbeats() {
