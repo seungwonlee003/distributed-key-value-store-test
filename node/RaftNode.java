@@ -15,32 +15,8 @@ public class RaftNode {
     private final RaftLog raftLog;
     private final RaftLogManager raftLogManager;
     private final StateMachine stateMachine;
-    private final ElectionManager electionManager;
     private final HeartbeatManager heartbeatManager;
     private final ElectionTimer electionTimer;
-
-    @Autowired
-    public RaftNode(RaftNodeState state,
-                    List<String> peerUrls,
-                    RestTemplate restTemplate,
-                    RaftLog raftLog,
-                    ExecutorService asyncExecutor,
-                    RaftLogManager raftLogManager,
-                    StateMachine stateMachine,
-                    ElectionManager electionManager,
-                    HeartbeatManager heartbeatManager,
-                    ElectionTimer electionTimer) {
-        this.state = state;
-        this.peerUrls = peerUrls;
-        this.restTemplate = restTemplate;
-        this.asyncExecutor = asyncExecutor;
-        this.raftLog = raftLog;
-        this.raftLogManager = raftLogManager;
-        this.stateMachine = stateMachine;
-        this.electionManager = electionManager;
-        this.heartbeatManager = heartbeatManager;
-        this.electionTimer = electionTimer;
-    }
 
     private synchronized void becomeLeader() {
         state.setRole(Role.LEADER);
@@ -57,12 +33,10 @@ public class RaftNode {
         electionTimer.reset();
     }
 
-// Control Method
     public void resetElectionTimer() {
         electionTimer.reset();
     }
 
-    // Facade Getters
     public int getCurrentTerm() {
         return state.getCurrentTerm();
     }
@@ -97,14 +71,5 @@ public class RaftNode {
 
     public RaftLog getRaftLog() {
         return raftLog;
-    }
-
-    public StateMachine getStateMachine() {
-        return stateMachine;
-    }
-
-    // Temporary Direct State Access (required by ElectionManager)
-    public RaftNodeState getState() {
-        return state;
     }
 }
