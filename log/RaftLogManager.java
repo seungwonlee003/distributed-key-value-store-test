@@ -161,6 +161,7 @@ public class RaftLogManager {
         }
     }
 
+    // disk writes are costly so is async using a dedicated single thread
     private void applyCommittedEntries() {
         applyExecutor.submit(() -> {
             int commitIndex = raftLog.getCommitIndex();
