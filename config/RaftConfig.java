@@ -2,9 +2,9 @@ import java.util.List;
 
 public class RaftConfig {
     
-    private final long heartbeatIntervalMillis;
-    private final long electionTimeoutMillisMin;
-    private final long electionTimeoutMillisMax;
+    public static final long DEFAULT_HEARTBEAT_INTERVAL;
+    public static final long DEFAULT_ELECTION_TIMEOUT_MIN = 1500;
+    public static final long DEFAULT_ELECTION_TIMEOUT_MAX = 1500;
     private final List<String> initialNodeUrls;
     
     // Optional: specify a dedicated thread pool size for async tasks (heartbeats, elections, etc.)
