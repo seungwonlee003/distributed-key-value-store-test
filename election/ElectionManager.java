@@ -7,6 +7,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class ElectionManager {
+    private final RaftConfig raftConfig;
     private final RaftNode raftNode;
 
     public ElectionManager(RaftNode raftNode) {
@@ -68,7 +69,7 @@ public class ElectionManager {
                         raftNode.getRaftLog().getLastTerm(),
                         peerUrl
                     ), executor)
-                    .orTimeout(200, TimeUnit.MILLISECONDS) // Shorter timeout
+                    .orTimeout(raftConfig.getElectionRpcTimeoutMillis(), TimeUnit.MILLISECONDS)
                     .exceptionally(throwable -> new VoteResponseDTO(currentTerm, false));
                 voteFutures.add(voteFuture);
             }
