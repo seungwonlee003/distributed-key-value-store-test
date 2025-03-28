@@ -6,5 +6,6 @@ public class RaftConfig {
     private final long electionTimeoutMillisMax;
     private final long clientRequestTimeoutMillis;
     private final long replicationBackoffMaxMillis;
+    private final long electionRpcTimeoutMillis; // e.g., default = 300
     private final List<String> initialNodeUrls;
 }
