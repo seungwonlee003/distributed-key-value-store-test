@@ -29,21 +29,29 @@ public class RaftController {
         AppendEntryResponseDTO response = raftLogManager.handleAppendEntries(dto);
         return ResponseEntity.ok(response);
     }
-
-    @GetMapping("/get")
-    public ResponseEntity<String> get(@RequestParam String key, 
-                                      @RequestParam(defaultValue = "DEFAULT") String consistency) {
-        try {
-            ConsistencyLevel level = ConsistencyLevel.fromString(consistency);
-            String value = consistencyService.read(key, level);
-            return value != null ? ResponseEntity.ok(value) : ResponseEntity.notFound().build();
-        } catch (ConsistencyException e) {
-            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+    
+    @PostMapping("/insert")
+    public ResponseEntity<String> insert(@RequestParam String key, @RequestParam String value) {
+        if (raftNode.getRole() != Role.LEADER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not the leader");
+        }
+    
+        LogEntry clientEntry = new LogEntry(
+            raftNode.getCurrentTerm(),
+            key,
+            value,
+            LogEntry.Operation.INSERT
+        );
+    
+        boolean committed = logManager.handleClientRequest(clientEntry);
+    
+        if (committed) {
+            return ResponseEntity.ok("Insert committed");
+        } else {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Insert failed (not committed or leadership lost)");
         }
     }
-
+    
     @PostMapping("/insert")
     public CompletableFuture<ResponseEntity<String>> insert(@RequestParam String key, @RequestParam String value) {
         if (raftNode.getRole() != Role.LEADER) {
