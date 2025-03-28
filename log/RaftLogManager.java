@@ -36,10 +36,6 @@ public class RaftLogManager {
     }
 
     public boolean handleClientRequest(LogEntry clientEntry) {
-        if (raftNode.getRole() != Role.LEADER) {
-            return false;
-        }
-    
         raftLog.append(clientEntry);
         int entryIndex = raftLog.getLastIndex();
     
