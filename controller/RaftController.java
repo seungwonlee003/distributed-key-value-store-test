@@ -65,9 +65,9 @@ public class RaftController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
 
-        LogEntry entry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.UPDATE);
+        LogEntry clientEntry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.UPDATE);
         try {
-            logManager.replicateLogToFollowers(Collections.singletonList(entry));
+            logManager.handleClientRequest(clientEntry);
             return ResponseEntity.ok("Update committed");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Update failed: " + e.getMessage());
@@ -80,9 +80,9 @@ public class RaftController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
 
-        LogEntry entry = new LogEntry(raftNode.getCurrentTerm(), key, null, LogEntry.Operation.DELETE);
+        LogEntry clientEntry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.DELETE);
         try {
-            logManager.replicateLogToFollowers(Collections.singletonList(entry));
+            logManager.handleClientRequest(clientEntry);
             return ResponseEntity.ok("Delete committed");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Delete failed: " + e.getMessage());
