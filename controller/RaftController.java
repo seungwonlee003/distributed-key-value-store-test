@@ -50,9 +50,9 @@ public class RaftController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
         }
 
-        LogEntry entry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.INSERT);
+        LogEntry clientEntry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.INSERT);
         try {
-            logManager.replicateLogToFollowers(Collections.singletonList(entry));
+            logManager.handleClientRequest(clientEntry);
             return ResponseEntity.ok("Insert committed");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Insert failed: " + e.getMessage());
