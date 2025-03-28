@@ -161,7 +161,8 @@ public class RaftLogManager {
             }
         }
     }
-        
+
+    // make it async
     private void applyCommittedEntries() {
         int commitIndex = raftLog.getCommitIndex();
         int lastApplied = raftNode.getLastApplied();
