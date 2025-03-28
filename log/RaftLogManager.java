@@ -49,7 +49,7 @@ public class RaftLogManager {
                 return true;
             }
             if (System.currentTimeMillis() - start > timeoutMillis) {
-                return false; // Avoid infinite loop
+                return false;
             }
     
             try {
@@ -125,7 +125,7 @@ public class RaftLogManager {
                 matchIndex.put(peerUrl, ni + entries.size() - 1);
                 return true;
             } else {
-                nextIndex.put(peerUrl, Math.max(0, ni - 1)); // Backtrack
+                nextIndex.put(peerUrl, Math.max(0, ni - 1)); // backtrack
                 return false;
             }
         } catch (Exception e) {
@@ -162,7 +162,7 @@ public class RaftLogManager {
         }
     }
 
-    // disk writes are costly so is async using a dedicated single thread
+    // disk writes are costly so is offloaded via an a dedicated thread
     private void applyCommittedEntries() {
         applyExecutor.submit(() -> {
             int commitIndex = raftLog.getCommitIndex();
