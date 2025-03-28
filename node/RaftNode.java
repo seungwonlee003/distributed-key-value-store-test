@@ -9,7 +9,7 @@ import java.util.concurrent.ExecutorService;
  *
  * It manages role transitions (leader, follower, candidate), tracks term and voting state.
  * 
- * RaftNode provides a clean interface to core Raft state while enforcing encapsulation and separation of concerns.
+ * RaftNode provides a clean interface to core Raft state so the client doesn't need to be aware of persistent and volatile states.
  */
 
 @Service
