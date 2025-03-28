@@ -4,6 +4,14 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
+/**
+ * RaftNode acts as the central coordinator for a server in the Raft consensus algorithm.
+ *
+ * It manages role transitions (leader, follower, candidate), tracks term and voting state.
+ * 
+ * RaftNode provides a clean interface to core Raft state while enforcing encapsulation and separation of concerns.
+ */
+
 @Service
 public class RaftNode {
     private final RaftNodeState state;
