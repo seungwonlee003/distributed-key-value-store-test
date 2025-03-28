@@ -128,6 +128,7 @@ public class RaftLogManager {
         } catch (Exception e) {
             return false; // Retry on network failure
         }
+    }
 
     private AppendEntryResponseDTO sendAppendEntries(String peerUrl, AppendEntryDTO dto) {
         try {
