@@ -3,34 +3,22 @@ import java.util.concurrent.*;
 public class HeartbeatManager {
     private final RaftNode raftNode;
     private final ElectionManager electionManager;
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> heartbeatFuture;
 
     public HeartbeatManager(RaftNode raftNode, ElectionManager electionManager) {
         this.raftNode = raftNode;
         this.electionManager = electionManager;
     }
-
-    public void startHeartbeats() {
+    
+    public void startHeartbeats() 
         stopHeartbeats();
         electionManager.cancelElectionTimerIfRunning();
-        RaftNodeState state = raftNode.getState();
-        if (state.getRole() != Role.LEADER){
-            electionManager.resetElectionTimer();
-            return;
-        }
-
-        heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
-            synchronized (this) {
-                if (state.getRole() == Role.LEADER) {
-                    try {
-                        raftNode.getRaftLogManager().replicateLogToFollowers(null);
-                    } catch (Exception e) {
-                        System.err.println("Heartbeat failed: " + e.getMessage());
-                    }
-                }
+        heartbeatFuture = heartbeatExecutor.scheduleAtFixedRate(() -> {
+            if (raftNode.getRole() == Role.LEADER) {
+                raftNode.startLogReplication(); // Empty entries act as heartbeat
             }
-        }, 0, 1000, TimeUnit.MILLISECONDS);
+        }, 0, 150, TimeUnit.MILLISECONDS); // 150ms heartbeat interval
     }
 
     public void stopHeartbeats() {
