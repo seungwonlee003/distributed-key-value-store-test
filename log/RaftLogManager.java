@@ -43,7 +43,7 @@ public class RaftLogManager {
         long start = System.currentTimeMillis();
         long timeoutMillis = 3000; // timeout to prevent infinite loop
 
-        // wait at most 5 seconds for the client's write to be acknowledged by the majority
+        // wait for at most 5 seconds for the client's write to be acknowledged by the majority
         while (raftNode.getRole() == Role.LEADER) {
             if (raftLog.getCommitIndex() >= entryIndex) {
                 return true;
