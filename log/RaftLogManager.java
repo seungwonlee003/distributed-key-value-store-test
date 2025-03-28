@@ -15,6 +15,7 @@ public class RaftLogManager {
     private final RaftConfig raftConfig;
     private final RaftLog raftLog;
     private final RaftNode raftNode;
+    private final StateMachine stateMachine;
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
     private final ScheduledExecutorService replicationExecutor;
@@ -171,7 +172,7 @@ public class RaftLogManager {
             for (int i = lastApplied + 1; i <= commitIndex; i++) {
                 try {
                     LogEntry entry = raftLog.getEntryAt(i);
-                    raftNode.getStateMachine().apply(entry);
+                    stateMachine.apply(entry);
                     raftNode.setLastApplied(i);
                 } catch (Exception e) {
                     System.out.println("State machine apply failed at index " + i + ": " + e.getMessage());
