@@ -1,8 +1,6 @@
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import javax.annotation.PostConstruct;
+
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -18,16 +16,38 @@ public class RaftNode {
     private final HeartbeatManager heartbeatManager;
     private final ElectionTimer electionTimer;
 
-    private synchronized void becomeLeader() {
-        state.setRole(Role.LEADER);
-        System.out.println("Node " + state.getNodeId() + " became leader for term " + state.getCurrentTerm());
+    public RaftNode(RaftNodeState state,
+                    List<String> peerUrls,
+                    RestTemplate restTemplate,
+                    ExecutorService asyncExecutor,
+                    RaftLog raftLog,
+                    RaftLogManager raftLogManager,
+                    StateMachine stateMachine,
+                    HeartbeatManager heartbeatManager,
+                    ElectionTimer electionTimer) {
+        this.state = state;
+        this.peerUrls = peerUrls;
+        this.restTemplate = restTemplate;
+        this.asyncExecutor = asyncExecutor;
+        this.raftLog = raftLog;
+        this.raftLogManager = raftLogManager;
+        this.stateMachine = stateMachine;
+        this.heartbeatManager = heartbeatManager;
+        this.electionTimer = electionTimer;
+    }
+
+    // =================== Raft Role Transitions =================== //
+
+    public synchronized void becomeLeader() {
+        state.setCurrentRole(Role.LEADER);
+        System.out.printf("Node %s became leader for term %d%n", state.getNodeId(), state.getCurrentTerm());
         raftLogManager.initializeIndices();
         heartbeatManager.startHeartbeats();
     }
 
     public synchronized void becomeFollower(int newTerm) {
         state.setCurrentTerm(newTerm);
-        state.setRole(Role.FOLLOWER);
+        state.setCurrentRole(Role.FOLLOWER);
         state.setVotedFor(null);
         heartbeatManager.stopHeartbeats();
         electionTimer.reset();
@@ -37,16 +57,34 @@ public class RaftNode {
         electionTimer.reset();
     }
 
+    // =================== Raft State Access =================== //
+
     public int getCurrentTerm() {
         return state.getCurrentTerm();
     }
 
-    public Role getRole() {
-        return state.getRole();
+    public void incrementTerm() {
+        state.setCurrentTerm(state.getCurrentTerm() + 1);
     }
 
-    public String getNodeId() {
+    public Role getCurrentRole() {
+        return state.getCurrentRole();
+    }
+
+    public void setCurrentRole(Role role) {
+        state.setCurrentRole(role);
+    }
+
+    public Integer getNodeId() {
         return state.getNodeId();
+    }
+
+    public Integer getVotedFor() {
+        return state.getVotedFor();
+    }
+
+    public void setVotedFor(Integer votedFor) {
+        state.setVotedFor(votedFor);
     }
 
     public int getLastApplied() {
@@ -57,9 +95,18 @@ public class RaftNode {
         state.setLastApplied(index);
     }
 
+    public Integer getCurrentLeader() {
+        return state.getCurrentLeader();
+    }
+
+    public void setCurrentLeader(Integer leaderId) {
+        state.setCurrentLeader(leaderId);
+    }
+
+    // =================== Topology & Infrastructure Access =================== //
+
     public List<String> getPeerUrls() {
         return peerUrls;
-    }
 
     public ExecutorService getAsyncExecutor() {
         return asyncExecutor;
@@ -67,9 +114,5 @@ public class RaftNode {
 
     public RestTemplate getRestTemplate() {
         return restTemplate;
-    }
-
-    public RaftLog getRaftLog() {
-        return raftLog;
     }
 }
