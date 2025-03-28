@@ -7,9 +7,9 @@ public class LogEntry {
     private final Operation operation; // Enum for operation type
 
     public enum Operation {
-        INSERT,  // Add new key-value pair (fails if key exists)
-        UPDATE,  // Modify existing key’s value (fails if key doesn’t exist)
-        DELETE   // Remove key-value pair (fails if key doesn’t exist)
+        INSERT,
+        UPDATE,
+        DELETE
     }
 
     public LogEntry(int term, String key, String value, Operation operation) {
