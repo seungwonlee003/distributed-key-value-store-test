@@ -55,7 +55,7 @@ public class RaftLogManager {
             }
     
             try {
-                Thread.sleep(10); // Polling interval
+                Thread.sleep(1000); // Polling interval
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
