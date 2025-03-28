@@ -2,17 +2,9 @@ import java.util.List;
 
 public class RaftConfig {
     
-    // Heartbeat interval in milliseconds: how often the leader sends heartbeat AppendEntries RPCs.
     private final long heartbeatIntervalMillis;
-    
-    // Election timeout: lower bound in milliseconds.
-    // If a follower hasn't received a heartbeat within a random time between these bounds, it starts an election.
     private final long electionTimeoutMillisMin;
-    
-    // Election timeout: upper bound in milliseconds.
     private final long electionTimeoutMillisMax;
-    
-    // List of node URLs for the initial cluster (for example, 5 nodes).
     private final List<String> initialNodeUrls;
     
     // Optional: specify a dedicated thread pool size for async tasks (heartbeats, elections, etc.)
