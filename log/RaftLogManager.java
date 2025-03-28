@@ -148,7 +148,6 @@ public class RaftLogManager {
         int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
         int currentTerm = raftNode.getCurrentTerm();
     
-        // Find the largest N where majority of matchIndex >= N
         for (int i = raftLog.getLastIndex(); i > raftLog.getCommitIndex(); i--) {
             int count = 1; // Leader
             for (int index : matchIndex.values()) {
@@ -156,6 +155,7 @@ public class RaftLogManager {
             }
             if (count >= majority && raftLog.getTermAt(i) == currentTerm) {
                 raftLog.setCommitIndex(i);
+                // async
                 applyCommittedEntries();
                 break;
             }
