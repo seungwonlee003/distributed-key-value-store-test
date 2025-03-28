@@ -45,18 +45,24 @@ public class RaftController {
     }
 
     @PostMapping("/insert")
-    public ResponseEntity<String> insert(@RequestParam String key, @RequestParam String value) {
+    public CompletableFuture<ResponseEntity<String>> insert(@RequestParam String key, @RequestParam String value) {
         if (raftNode.getRole() != Role.LEADER) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
+            return CompletableFuture.completedFuture(
+                ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader")
+            );
         }
-
+    
         LogEntry clientEntry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.INSERT);
-        try {
-            logManager.handleClientRequest(clientEntry);
-            return ResponseEntity.ok("Insert committed");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Insert failed: " + e.getMessage());
-        }
+        return logManager.handleClientRequest(clientEntry)
+            .thenApply(committed -> {
+                if (committed) {
+                    return ResponseEntity.ok("Insert committed");
+                } else {
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Insert failed (not committed)");
+                }
+            }).exceptionally(e -> {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+            });
     }
 
     @PostMapping("/update")
