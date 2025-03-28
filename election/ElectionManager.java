@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 
 public class ElectionManager {
     private final RaftConfig raftConfig;
+    private final RaftLog raftLog;
     private final RaftNode raftNode;
 
     public ElectionManager(RaftNode raftNode) {
@@ -30,20 +31,19 @@ public class ElectionManager {
             currentTerm = requestTerm; 
         }
 
-        Integer votedFor = raftNode.getState().getVotedFor(); // Minimal state access for votedFor
+        Integer votedFor = raftNode.getVotedFor();
         if (votedFor != null && !votedFor.equals(candidateId)) {
             return new VoteResponseDTO(currentTerm, false);
         }
 
-        // Retrieve log details via RaftNode facade
-        int localLastTerm = raftNode.getRaftLog().getLastTerm();
-        int localLastIndex = raftNode.getRaftLog().getLastIndex();
+        int localLastTerm = raftLog.getLastTerm();
+        int localLastIndex = raftLog.getLastIndex();
         if (candidateLastTerm < localLastTerm ||
             (candidateLastTerm == localLastTerm && candidateLastIndex < localLastIndex)) {
             return new VoteResponseDTO(currentTerm, false);
         }
 
-        raftNode.getState().setVotedFor(candidateId); 
+        raftNode.setVotedFor(candidateId); 
         raftNode.resetElectionTimer();
         return new VoteResponseDTO(currentTerm, true);
     }
@@ -52,9 +52,9 @@ public class ElectionManager {
         synchronized (this) {
             if (raftNode.getRole() == Role.LEADER) return;
     
-            raftNode.getState().setRole(Role.CANDIDATE);
-            raftNode.getState().incrementTerm();
-            raftNode.getState().setVotedFor(raftNode.getNodeId());
+            raftNode.setCurrentRole(Role.CANDIDATE);
+            raftNode.incrementTerm();
+            raftNode.setVotedFor(raftNode.getNodeId());
     
             int currentTerm = raftNode.getCurrentTerm();
             List<CompletableFuture<VoteResponseDTO>> voteFutures = new ArrayList<>();
@@ -65,8 +65,8 @@ public class ElectionManager {
                     .supplyAsync(() -> requestVote(
                         currentTerm,
                         raftNode.getNodeId(),
-                        raftNode.getRaftLog().getLastIndex(),
-                        raftNode.getRaftLog().getLastTerm(),
+                        raftLog.getLastIndex(),
+                        raftLog.getLastTerm(),
                         peerUrl
                     ), executor)
                     .orTimeout(raftConfig.getElectionRpcTimeoutMillis(), TimeUnit.MILLISECONDS)
