@@ -18,9 +18,7 @@ public class RaftNode {
     private final List<String> peerUrls;
     private final RestTemplate restTemplate;
     private final ExecutorService asyncExecutor;
-    private final RaftLog raftLog;
     private final RaftLogManager raftLogManager;
-    private final StateMachine stateMachine;
     private final HeartbeatManager heartbeatManager;
     private final ElectionTimer electionTimer;
 
@@ -28,7 +26,6 @@ public class RaftNode {
                     List<String> peerUrls,
                     RestTemplate restTemplate,
                     ExecutorService asyncExecutor,
-                    RaftLog raftLog,
                     RaftLogManager raftLogManager,
                     StateMachine stateMachine,
                     HeartbeatManager heartbeatManager,
@@ -37,9 +34,7 @@ public class RaftNode {
         this.peerUrls = peerUrls;
         this.restTemplate = restTemplate;
         this.asyncExecutor = asyncExecutor;
-        this.raftLog = raftLog;
         this.raftLogManager = raftLogManager;
-        this.stateMachine = stateMachine;
         this.heartbeatManager = heartbeatManager;
         this.electionTimer = electionTimer;
     }
