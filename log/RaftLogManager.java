@@ -42,7 +42,7 @@ public class RaftLogManager {
         int entryIndex = raftLog.getLastIndex();
     
         long start = System.currentTimeMillis();
-        long timeoutMillis = raftConfig.getClientTimeout(); 
+        long timeoutMillis = raftConfig.getClientRequestTimeoutMillis(); 
 
         // wait for at most 5 seconds for the client's write to be acknowledged by the majority
         while (raftNode.getRole() == Role.LEADER) {
@@ -84,7 +84,7 @@ public class RaftLogManager {
                 backoffMs = raftConfig.getHeartbeatIntervalMillis();
                 updateCommitIndex(); 
             } else {
-                backoffMs = Math.min(backoffMs * 2, 5000);
+                backoffMs = Math.min(backoffMs * 2, raftConfig.getReplicationBackoffMaxMillis());
             }
 
             try {
