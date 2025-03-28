@@ -18,6 +18,7 @@ public class RaftLogManager {
     private final Map<String, Integer> matchIndex;
     private final ScheduledExecutorService replicationExecutor;
     private final Map<String, Boolean> pendingReplication = new ConcurrentHashMap<>();
+    private final ExecutorService applyExecutor = Executors.newSingleThreadExecutor();
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
@@ -161,7 +162,7 @@ public class RaftLogManager {
     }
 
     private void applyCommittedEntries() {
-        CompletableFuture.runAsync(() -> {
+        applyExecutor.submit(() -> {
             int commitIndex = raftLog.getCommitIndex();
             int lastApplied = raftNode.getLastApplied();
             for (int i = lastApplied + 1; i <= commitIndex; i++) {
@@ -170,14 +171,12 @@ public class RaftLogManager {
                     raftNode.getStateMachine().apply(entry);
                     raftNode.setLastApplied(i);
                 } catch (Exception e) {
-                    // In a real system, you might want to log and handle the error gracefully.
                     System.out.println("State machine apply failed at index " + i + ": " + e.getMessage());
                     System.exit(1);
                 }
             }
-        }, replicationExecutor); 
+        });
     }
-
 
     public synchronized AppendEntryResponseDTO handleAppendEntries(AppendEntryDTO dto) {
         int currentTerm = raftNode.getCurrentTerm();
