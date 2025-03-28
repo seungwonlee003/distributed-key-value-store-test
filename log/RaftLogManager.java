@@ -41,7 +41,7 @@ public class RaftLogManager {
         int entryIndex = raftLog.getLastIndex();
     
         long start = System.currentTimeMillis();
-        long timeoutMillis = 3000; 
+        long timeoutMillis = raftNode.getConfig().getClientTimeout(); 
 
         // wait for at most 5 seconds for the client's write to be acknowledged by the majority
         while (raftNode.getRole() == Role.LEADER) {
@@ -76,11 +76,11 @@ public class RaftLogManager {
         
     private void replicateToFollowerLoop(String peerUrl) {
         // the frequency of heartbeats depends on replicateToFollowerLoop
-        int backoffMs = 1000;
+        int backoffMs = raftNode.getConfig().getHeartbeatIntervalMillis();
         while (raftNode.getRole() == Role.LEADER) {
             boolean success = replicateToFollower(peerUrl);
             if (success) {
-                backoffMs = 1000;
+                backoffMs = raftNode.getConfig().getHeartbeatIntervalMillis();
                 updateCommitIndex(); 
             } else {
                 backoffMs = Math.min(backoffMs * 2, 5000);
