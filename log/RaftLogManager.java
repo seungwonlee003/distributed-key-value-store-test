@@ -37,17 +37,23 @@ public class RaftLogManager {
 
     public boolean handleClientRequest(LogEntry clientEntry) {
         if (raftNode.getRole() != Role.LEADER) {
-            return CompletableFuture.completedFuture(false);
+            return false;
         }
     
         raftLog.append(clientEntry);
         int entryIndex = raftLog.getLastIndex();
-
-        // designed so that if while loop doesn't terminate for too long, consider it as uncommitted.
+    
+        long start = System.currentTimeMillis();
+        long timeoutMillis = 3000; // timeout to prevent infinite loop
+    
         while (raftNode.getRole() == Role.LEADER) {
             if (raftLog.getCommitIndex() >= entryIndex) {
                 return true;
             }
+            if (System.currentTimeMillis() - start > timeoutMillis) {
+                return false; // Avoid infinite loop
+            }
+    
             try {
                 Thread.sleep(10); // Polling interval
             } catch (InterruptedException e) {
@@ -55,7 +61,8 @@ public class RaftLogManager {
                 return false;
             }
         }
-        return false;
+    
+        return false; // Leadership lost
     }
     
     public void startLogReplication() {
