@@ -102,6 +102,56 @@ public class ElectionManager {
                 return null;
             });
         }
+        raftNode.resetElectionTimer();
+    }
+
+    private void startElection() {
+        synchronized (this) {
+            if (raftNode.getRole() == Role.LEADER) return;
+    
+            raftNode.getState().setRole(Role.CANDIDATE);
+            raftNode.getState().incrementTerm();
+            raftNode.getState().setVotedFor(raftNode.getNodeId());
+    
+            int currentTerm = raftNode.getCurrentTerm();
+            List<CompletableFuture<VoteResponseDTO>> voteFutures = new ArrayList<>();
+            ExecutorService executor = raftNode.getAsyncExecutor();
+    
+            for (String peerUrl : raftNode.getPeerUrls()) {
+                CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
+                    .supplyAsync(() -> requestVote(
+                        currentTerm,
+                        raftNode.getNodeId(),
+                        raftNode.getRaftLog().getLastIndex(),
+                        raftNode.getRaftLog().getLastTerm(),
+                        peerUrl
+                    ), executor)
+                    .orTimeout(200, TimeUnit.MILLISECONDS) // Shorter timeout
+                    .exceptionally(throwable -> new VoteResponseDTO(currentTerm, false));
+                voteFutures.add(voteFuture);
+            }
+    
+            int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
+            AtomicInteger voteCount = new AtomicInteger(1); // Self-vote
+    
+            CompletableFuture.runAsync(() -> {
+                for (CompletableFuture<VoteResponseDTO> future : voteFutures) {
+                    future.thenAccept(response -> {
+                        synchronized (this) {
+                            if (raftNode.getRole() != Role.CANDIDATE || raftNode.getCurrentTerm() != currentTerm) {
+                                return;
+                            }
+                            if (response != null && response.isVoteGranted()) {
+                                if (voteCount.incrementAndGet() >= majority) {
+                                    raftNode.becomeLeader();
+                                }
+                            }
+                        }
+                    });
+                }
+            }, executor);
+        }
+        raftNode.resetElectionTimer();
     }
 
     private VoteResponseDTO requestVote(int term, int candidateId, int lastLogIndex, int lastLogTerm, String peerUrl) {
