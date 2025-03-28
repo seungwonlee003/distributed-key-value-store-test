@@ -73,6 +73,7 @@ public class RaftLogManager {
     }
         
     private void replicateToFollowerLoop(String peerUrl) {
+        // the frequency of heartbeats depends on replicateToFollowerLoop
         int backoffMs = 1000;
         while (raftNode.getRole() == Role.LEADER) {
             boolean success = replicateToFollower(peerUrl);
@@ -170,7 +171,7 @@ public class RaftLogManager {
                 raftNode.setLastApplied(i);
             } catch (Exception e) {
                 System.out.println("State machine apply failed at index " + i + ": " + e.getMessage());
-                break; // FIX: #7 (prevent gap in lastApplied) - make it system.exit(1)?
+                System.exit(1); // FIX: #7 (prevent gap in lastApplied) - make it system.exit(1)?
             }
         }
     }
