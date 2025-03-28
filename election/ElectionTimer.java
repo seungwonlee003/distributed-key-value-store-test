@@ -2,12 +2,11 @@ import java.util.Random;
 import java.util.concurrent.*;
 
 public class ElectionTimer {
+    private final RaftConfig raftConfig;
     private final RaftNode raftNode;
     private final ElectionManager electionManager;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final Random random = new Random();
-    private final int electionTimeoutMin = 3000; 
-    private final int electionTimeoutMax = 5000;
     private ScheduledFuture<?> electionFuture;
 
     public ElectionTimer(RaftNode raftNode, ElectionManager electionManager) {
@@ -18,7 +17,11 @@ public class ElectionTimer {
 
     public synchronized void reset() {
         cancel();
-        int timeout = electionTimeoutMin + random.nextInt(electionTimeoutMax - electionTimeoutMin);
+    
+        long minTimeout = raftConfig.getElectionTimeoutMillisMin();
+        long maxTimeout = raftConfig.getElectionTimeoutMillisMax();
+        long timeout = minTimeout + random.nextInt((int)(maxTimeout - minTimeout));
+    
         electionFuture = scheduler.schedule(() -> {
             electionManager.startElection();
         }, timeout, TimeUnit.MILLISECONDS);
