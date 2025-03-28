@@ -16,12 +16,15 @@ public class RaftLogManager {
     private final RaftLog raftLog;
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
+    private final ScheduledExecutorService replicationExecutor;
+    private final Map<String, Boolean> pendingReplication = new ConcurrentHashMap<>();
 
     public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
         this.raftNode = raftNode;
         this.raftLog = raftLog;
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
+        this.replicationExecutor = Executors.newScheduledThreadPool(raftNode.getPeerUrls().size());
     }
 
     public void initializeIndices() {
@@ -32,123 +35,98 @@ public class RaftLogManager {
         }
     }
 
-    public synchronized AppendEntryResponseDTO handleAppendEntries(AppendEntryDTO dto) {
-        int currentTerm = raftNode.getCurrentTerm();
-        int leaderTerm = dto.getTerm();
-        int prevLogIndex = dto.getPrevLogIndex();
-        int prevLogTerm = dto.getPrevLogTerm();
-        List<LogEntry> entries = dto.getEntries();
-        int leaderCommit = dto.getLeaderCommit();
-
-        if (leaderTerm < currentTerm) {
-            return new AppendEntryResponseDTO(currentTerm, false);
-        }
-
-        if (leaderTerm > currentTerm) {
-            raftNode.becomeFollower(leaderTerm);
-            currentTerm = leaderTerm;
-        }
-
-        if (prevLogIndex > 0 &&
-            (!raftLog.containsEntryAt(prevLogIndex) || raftLog.getTermAt(prevLogIndex) != prevLogTerm)) {
-            return new AppendEntryResponseDTO(currentTerm, false);
-        }
-
-        appendEntries(prevLogIndex, entries);
-
-        if (leaderCommit > raftLog.getCommitIndex()) {
-            int lastNewEntryIndex = prevLogIndex + entries.size();
-            raftLog.setCommitIndex(Math.min(leaderCommit, lastNewEntryIndex));
-            applyCommittedEntries();
-        }
-
-        raftNode.resetElectionTimer();
-        return new AppendEntryResponseDTO(currentTerm, true);
-    }
-
-    private void appendEntries(int prevLogIndex, List<LogEntry> entries) {
-        int index = prevLogIndex + 1;
-        if (!entries.isEmpty()) {
-            if (raftLog.containsEntryAt(index) && raftLog.getTermAt(index) != entries.get(0).getTerm()) {
-                raftLog.deleteFrom(index);
-            }
-            raftLog.appendAll(entries);
-        }
-    }
-
-    public synchronized void replicateLogToFollowers(List<LogEntry> newEntries) throws Exception {
-        // stop and heartbeat and start again at the end? because two threads could interfere.
+    public boolean handleClientRequest(LogEntry clientEntry) {
         if (raftNode.getRole() != Role.LEADER) {
-            throw new IllegalStateException("Not leader");
+            return CompletableFuture.completedFuture(false);
         }
+    
+        raftLog.append(clientEntry);
+        int entryIndex = raftLog.getLastIndex();
 
-        if (newEntries != null && !newEntries.isEmpty()) {
-            raftLog.appendAll(newEntries);
+        // designed so that if while loop doesn't terminate for too long, consider it as uncommitted.
+        while (raftNode.getRole() == Role.LEADER) {
+            if (raftLog.getCommitIndex() >= entryIndex) {
+                return true;
+            }
+            try {
+                Thread.sleep(10); // Polling interval
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
         }
+        return false;
+    }
+    
+    public void startLogReplication() {
+        if (raftNode.getRole() != Role.LEADER) return;
+
+        for (String peerUrl : raftNode.getPeerUrls()) {
+            if (!pendingReplication.getOrDefault(peerUrl, false)) {
+                pendingReplication.put(peerUrl, true);
+                replicationExecutor.submit(() -> replicateToFollower(peerUrl));
+            }
+        }
+    }
         
-        int finalIndexOfNewEntries = raftLog.getLastIndex();
-        int currentTerm = raftNode.getCurrentTerm();
-        if (nextIndex.isEmpty()) {
-            initializeIndices();
-        }
-
-        ExecutorService executor = raftNode.getAsyncExecutor();
-        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
-
-        AtomicInteger successes = new AtomicInteger(1);
-        CountDownLatch majorityLatch = new CountDownLatch(majority - 1);
-
-        List<CompletableFuture<Void>> futures = raftNode.getPeerUrls().stream()
-            .map(peerUrl -> CompletableFuture.runAsync(() -> {
-                boolean success = replicateToFollower(peerUrl, currentTerm, finalIndexOfNewEntries);
-                if (success && successes.incrementAndGet() <= majority) {
-                    majorityLatch.countDown();
-                }
-            }, executor)
-            .exceptionally(throwable -> null))
-            .collect(Collectors.toList());
-
-        boolean majorityAchieved = majorityLatch.await(1000, TimeUnit.MILLISECONDS);
-
-        if (!majorityAchieved || successes.get() < majority) {
-            throw new RuntimeException("Failed to achieve majority commit");
-        }
-
-        commitLogEntries(finalIndexOfNewEntries);
-    }
-
-    private void commitLogEntries(int finalIndexOfNewEntries) {
-        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
-        int currentTerm = raftNode.getCurrentTerm();
-        int newCommitIndex = raftLog.getCommitIndex();
-    
-        // Track the highest index replicated to a majority (any term)
-        int maxReplicated = raftLog.getCommitIndex();
-        for (int peerIndex : matchIndex.values()) {
-            if (peerIndex > maxReplicated) maxReplicated = peerIndex;
-        }
-    
-        // Find the largest N where N > commitIndex, and a majority of matchIndex[i] ≥ N
-        for (int i = maxReplicated; i > raftLog.getCommitIndex(); i--) {
-            int count = 1; // Leader
-            for (int peerIndex : matchIndex.values()) {
-                if (peerIndex >= i) count++;
+    private void replicateToFollower(String peerUrl) {
+        int backoffMs = 1000;
+        while (raftNode.getRole() == Role.LEADER) {
+            boolean success = replicateToFollower(peerUrl);
+            if (success) {
+                backoffMs = 1000;
+                updateCommitIndex(); 
+            } else {
+                backoffMs = Math.min(backoffMs * 2, 5000);
             }
-            if (count >= majority) {
-                // Ensure at least one entry in the current term is included (Raft §5.4.2)
-                if (raftLog.getTermAt(i) == currentTerm) {
-                    newCommitIndex = i;
-                    break;
-                }
+
+            try {
+                Thread.sleep(backoffMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
-    
-        if (newCommitIndex > raftLog.getCommitIndex()) {
-            raftLog.setCommitIndex(newCommitIndex);
-            applyCommittedEntries();
-        }
+        pendingReplication.put(peerUrl, false);
     }
-    
+
+    private boolean replicateToFollower(String peerUrl) {
+        if (raftNode.getRole() != Role.LEADER) return false;
+
+        int ni = nextIndex.get(peerUrl);
+        int prevLogIndex = ni - 1;
+        int prevLogTerm = (prevLogIndex >= 0) ? raftLog.getTermAt(prevLogIndex) : 0;
+        List<LogEntry> entries = raftLog.getEntriesFrom(ni);
+
+        AppendEntryDTO dto = new AppendEntryDTO(
+            raftNode.getCurrentTerm(),
+            raftNode.getNodeId(),
+            prevLogIndex,
+            prevLogTerm,
+            entries,
+            raftLog.getCommitIndex()
+        );
+
+        try {
+            AppendEntryResponseDTO response = sendAppendEntries(peerUrl, dto);
+            if (response.getTerm() > raftNode.getCurrentTerm()) {
+                raftNode.becomeFollower(response.getTerm());
+                return false;
+            }
+
+            if (response.isSuccess()) {
+                nextIndex.put(peerUrl, ni + entries.size());
+                matchIndex.put(peerUrl, ni + entries.size() - 1);
+                return true;
+            } else {
+                nextIndex.put(peerUrl, Math.max(0, ni - 1)); // Backtrack
+                return false;
+            }
+        } catch (Exception e) {
+            return false; // Retry on network failure
+        }
+
+
     private boolean replicateToFollower(String peerUrl, int currentTerm, int targetIndex) {
         if (raftNode.getRole() != Role.LEADER) {
             return false;
@@ -197,6 +175,24 @@ public class RaftLogManager {
         }
     }
 
+    private void updateCommitIndex() {
+        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
+        int currentTerm = raftNode.getCurrentTerm();
+    
+        // Find the largest N where majority of matchIndex >= N
+        for (int i = raftLog.getLastIndex(); i > raftLog.getCommitIndex(); i--) {
+            int count = 1; // Leader
+            for (int index : matchIndex.values()) {
+                if (index >= i) count++;
+            }
+            if (count >= majority && raftLog.getTermAt(i) == currentTerm) {
+                raftLog.setCommitIndex(i);
+                applyCommittedEntries();
+                break;
+            }
+        }
+    }
+        
     private void applyCommittedEntries() {
         int commitIndex = raftLog.getCommitIndex();
         int lastApplied = raftNode.getLastApplied();
@@ -209,6 +205,51 @@ public class RaftLogManager {
                 System.out.println("State machine apply failed at index " + i + ": " + e.getMessage());
                 break; // FIX: #7 (prevent gap in lastApplied)
             }
+        }
+    }
+
+    public synchronized AppendEntryResponseDTO handleAppendEntries(AppendEntryDTO dto) {
+        int currentTerm = raftNode.getCurrentTerm();
+        int leaderTerm = dto.getTerm();
+        int prevLogIndex = dto.getPrevLogIndex();
+        int prevLogTerm = dto.getPrevLogTerm();
+        List<LogEntry> entries = dto.getEntries();
+        int leaderCommit = dto.getLeaderCommit();
+
+        if (leaderTerm < currentTerm) {
+            return new AppendEntryResponseDTO(currentTerm, false);
+        }
+
+        if (leaderTerm > currentTerm) {
+            raftNode.becomeFollower(leaderTerm);
+            currentTerm = leaderTerm;
+        }
+
+        if (prevLogIndex > 0 &&
+            (!raftLog.containsEntryAt(prevLogIndex) || raftLog.getTermAt(prevLogIndex) != prevLogTerm)) {
+            return new AppendEntryResponseDTO(currentTerm, false);
+        }
+
+        appendEntries(prevLogIndex, entries);
+
+        if (leaderCommit > raftLog.getCommitIndex()) {
+            int lastNewEntryIndex = prevLogIndex + entries.size();
+            raftLog.setCommitIndex(Math.min(leaderCommit, lastNewEntryIndex));
+            applyCommittedEntries();
+        }
+
+        raftNode.resetElectionTimer();
+        return new AppendEntryResponseDTO(currentTerm, true);
+    }
+
+    
+    private void appendEntries(int prevLogIndex, List<LogEntry> entries) {
+        int index = prevLogIndex + 1;
+        if (!entries.isEmpty()) {
+            if (raftLog.containsEntryAt(index) && raftLog.getTermAt(index) != entries.get(0).getTerm()) {
+                raftLog.deleteFrom(index);
+            }
+            raftLog.appendAll(entries);
         }
     }
 }
