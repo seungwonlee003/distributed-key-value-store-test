@@ -64,12 +64,12 @@ public class RaftLogManager {
         for (String peerUrl : raftNode.getPeerUrls()) {
             if (!pendingReplication.getOrDefault(peerUrl, false)) {
                 pendingReplication.put(peerUrl, true);
-                replicationExecutor.submit(() -> replicateToFollower(peerUrl));
+                replicationExecutor.submit(() -> replicateToFollowerLoop(peerUrl));
             }
         }
     }
         
-    private void replicateToFollower(String peerUrl) {
+    private void replicateToFollowerLoop(String peerUrl) {
         int backoffMs = 1000;
         while (raftNode.getRole() == Role.LEADER) {
             boolean success = replicateToFollower(peerUrl);
@@ -126,44 +126,6 @@ public class RaftLogManager {
             return false; // Retry on network failure
         }
 
-
-    private boolean replicateToFollower(String peerUrl, int currentTerm, int targetIndex) {
-        if (raftNode.getRole() != Role.LEADER) {
-            return false;
-        }
-
-        int ni = nextIndex.get(peerUrl);
-        int prevLogIndex = Math.max(0, ni - 1);
-        int prevLogTerm = prevLogIndex > 0 ? raftLog.getTermAt(prevLogIndex) : 0;
-        List<LogEntry> entriesToSend = raftLog.getEntriesFrom(ni, targetIndex);
-
-        AppendEntryDTO dto = new AppendEntryDTO(
-            currentTerm,
-            raftNode.getNodeId(),
-            prevLogIndex,
-            prevLogTerm,
-            entriesToSend,
-            raftLog.getCommitIndex()
-        );
-
-        AppendEntryResponseDTO response = sendAppendEntries(peerUrl, dto);
-
-        if (response.getTerm() > currentTerm) {
-            raftNode.becomeFollower(response.getTerm());
-            return false;
-        }
-
-        if (response.isSuccess()) {
-            nextIndex.put(peerUrl, ni + entriesToSend.size());
-            matchIndex.put(peerUrl, ni + entriesToSend.size() - 1);
-            return true;
-        } else {
-            int backtrack = Math.max(0, ni - 1);
-            nextIndex.put(peerUrl, backtrack);
-            return false;
-        }
-    }
-
     private AppendEntryResponseDTO sendAppendEntries(String peerUrl, AppendEntryDTO dto) {
         try {
             String url = peerUrl + "/raft/appendEntries";
@@ -203,7 +165,7 @@ public class RaftLogManager {
                 raftNode.setLastApplied(i);
             } catch (Exception e) {
                 System.out.println("State machine apply failed at index " + i + ": " + e.getMessage());
-                break; // FIX: #7 (prevent gap in lastApplied)
+                break; // FIX: #7 (prevent gap in lastApplied) - make it system.exit(1)?
             }
         }
     }
