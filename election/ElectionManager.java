@@ -57,7 +57,7 @@ public class ElectionManager {
     
             int currentTerm = nodeState.getCurrentTerm();
             List<CompletableFuture<VoteResponseDTO>> voteFutures = new ArrayList<>();
-            ExecutorService executor = raftNode.getAsyncExecutor();
+            ExecutorService executor = Executors.newCachedThreadPool(); 
     
             for (String peerUrl : nodeState.getPeerUrls()) {
                 CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
