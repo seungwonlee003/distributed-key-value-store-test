@@ -14,6 +14,8 @@ public class RaftNodeState {
 
     private int lastApplied = 0; 
 
+    private List<Integer> peerUrls;
+
     // get nodeId from the application.properties
     public RaftNodeState(int nodeId) {
         this.nodeId = nodeId;
