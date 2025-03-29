@@ -6,14 +6,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
+@Service
+@RequiredArgsConstructor
 public class ElectionManager {
     private final RaftConfig raftConfig;
     private final RaftLog raftLog;
     private final RaftNode raftNode;
-
-    public ElectionManager(RaftNode raftNode) {
-        this.raftNode = raftNode;
-    }
 
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
         int currentTerm = raftNode.getCurrentTerm();
