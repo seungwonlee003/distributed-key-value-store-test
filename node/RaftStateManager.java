@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
  */
 
 @Service
+@RequiredArgsConstructor
 public class RaftStateManager {
     private final RaftNodeState state;
     private final HeartbeatManager heartbeatManager;
