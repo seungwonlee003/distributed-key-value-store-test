@@ -1,4 +1,4 @@
-@Service
+@Component
 @RequiredArgsConstructor
     public class LogReplicator {
     private final RaftConfig config;
