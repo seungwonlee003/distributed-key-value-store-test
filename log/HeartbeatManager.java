@@ -1,15 +1,10 @@
 import java.util.concurrent.*;
 
 public class HeartbeatManager {
-    private final RaftNode raftNode;
+    private final RaftLogManager raftLogManager;
     private final ElectionManager electionManager;
     ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> heartbeatFuture;
-
-    public HeartbeatManager(RaftNode raftNode, ElectionManager electionManager) {
-        this.raftNode = raftNode;
-        this.electionManager = electionManager;
-    }
 
     // for starting heartbeats only
     public void startHeartbeats(){
@@ -17,7 +12,7 @@ public class HeartbeatManager {
         electionManager.cancelElectionTimerIfRunning();
         heartbeatFuture = heartbeatExecutor.scheduleAtFixedRate(() -> {
             if (raftNode.getRole() == Role.LEADER) {
-                raftNode.startLogReplication();
+                raftLogManager.startLogReplication();
             }
         }, 0, 1000, TimeUnit.MILLISECONDS);
     }
