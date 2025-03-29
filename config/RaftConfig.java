@@ -1,5 +1,9 @@
 import java.util.List;
 
+@Component
+@ConfigurationProperties(prefix = "raft")
+@Getter
+@Setter
 public class RaftConfig {
     private final long heartbeatIntervalMillis;
     private final long electionTimeoutMillisMin;
