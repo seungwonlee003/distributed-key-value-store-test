@@ -5,7 +5,7 @@ public class AppendEntriesHandler {
     private final RaftStateManager stateManager;
     private final RaftNodeState nodeState;
     private final StateMachine stateMachine;
-    private final ExecutorService applyExecutor = Executors.newSingleThreadExecutor();
+    private ExecutorService applyExecutor = Executors.newSingleThreadExecutor();
 
     public synchronized AppendEntryResponseDTO handle(AppendEntryDTO dto) {
         int term = nodeState.getCurrentTerm();
