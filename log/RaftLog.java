@@ -3,6 +3,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
+@Component
 public class RaftLog {
     private final List<LogEntry> logEntries = new ArrayList<>();
     private int commitIndex = 0;
