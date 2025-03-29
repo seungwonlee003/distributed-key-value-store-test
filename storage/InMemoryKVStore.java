@@ -3,6 +3,7 @@ package com.example.raft.storage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
+@Component
 public class InMemoryKVStore implements KVStore {
     private final Map<String, String> store;
 
