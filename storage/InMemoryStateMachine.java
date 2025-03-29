@@ -2,6 +2,7 @@ package com.example.raft.storage;
 
 import com.example.raft.log.LogEntry;
 
+@Component
 public class InMemoryStateMachine implements StateMachine {
     private final KVStore kvStore;
 
