@@ -4,6 +4,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 // Persistent state on all servers:
 @Getter
 @Setter
+@Component
+@RequiredArgsConstructor
+@NoArgsConstructor
 public class RaftNodeState {
     private int currentTerm = 0;  
     private Integer votedFor = null; 
