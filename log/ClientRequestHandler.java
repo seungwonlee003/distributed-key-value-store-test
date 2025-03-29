@@ -1,4 +1,4 @@
-@Service
+@Component
 @RequiredArgsConstructor
 public class ClientRequestHandler {
     private final RaftLog raftLog;
