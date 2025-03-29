@@ -1,3 +1,8 @@
+/**
+ * Central coordinator for Raft log-related operations.
+ * Acts as a Facade for client requests, log replication, and follower log handling.
+ */
+
 @Service
 public class RaftLogManager {
     private final ClientRequestHandler clientRequestHandler;
