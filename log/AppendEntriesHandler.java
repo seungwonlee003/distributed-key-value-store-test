@@ -1,4 +1,4 @@
-@Service
+@Component
 @RequiredArgsConstructor
 public class AppendEntriesHandler {
     private final RaftLog log;
