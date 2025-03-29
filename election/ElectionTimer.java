@@ -1,6 +1,7 @@
 import java.util.Random;
 import java.util.concurrent.*;
 
+@Component
 public class ElectionTimer {
     private final RaftConfig raftConfig;
     private final RaftNode raftNode;
