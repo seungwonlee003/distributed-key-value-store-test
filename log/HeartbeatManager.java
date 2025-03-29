@@ -1,5 +1,7 @@
 import java.util.concurrent.*;
 
+@Component
+@RequiredArgsConstructor
 public class HeartbeatManager {
     private final RaftLogManager raftLogManager;
     private final RaftNodeState raftNodeState;
