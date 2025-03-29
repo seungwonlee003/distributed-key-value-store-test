@@ -5,18 +5,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Collections;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/raft")
 public class RaftController {
 
     private final RaftNode raftNode;
     private final RaftLogManager raftLogManager;
     private final ElectionManager electionManager;
-
-    public RaftController(RaftNode raftNode, RaftLogManager raftLogManager, ElectionManager electionManager) {
-        this.raftNode = raftNode;
-        this.raftLogManager = raftLogManager;
-        this.electionManager = electionManager;
-    }
 
     @PostMapping("/requestVote")
     public ResponseEntity<VoteResponseDTO> vote(@RequestBody RequestVoteDTO requestVoteDTO) {
@@ -44,62 +39,55 @@ public class RaftController {
         );
     
         boolean committed = logManager.handleClientRequest(clientEntry);
-    
         if (committed) {
             return ResponseEntity.ok("Insert committed");
         } else {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Insert failed (not committed or leadership lost)");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                 .body("Insert failed (not committed or leadership lost)");
         }
     }
     
-    @PostMapping("/insert")
-    public CompletableFuture<ResponseEntity<String>> insert(@RequestParam String key, @RequestParam String value) {
-        if (raftNode.getRole() != Role.LEADER) {
-            return CompletableFuture.completedFuture(
-                ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader")
-            );
-        }
-    
-        LogEntry clientEntry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.INSERT);
-        return logManager.handleClientRequest(clientEntry)
-            .thenApply(committed -> {
-                if (committed) {
-                    return ResponseEntity.ok("Insert committed");
-                } else {
-                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Insert failed (not committed)");
-                }
-            }).exceptionally(e -> {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
-            });
-    }
-
     @PostMapping("/update")
     public ResponseEntity<String> update(@RequestParam String key, @RequestParam String value) {
         if (raftNode.getRole() != Role.LEADER) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not the leader");
         }
-
-        LogEntry clientEntry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.UPDATE);
-        try {
-            logManager.handleClientRequest(clientEntry);
+    
+        LogEntry clientEntry = new LogEntry(
+            raftNode.getCurrentTerm(),
+            key,
+            value,
+            LogEntry.Operation.UPDATE
+        );
+    
+        boolean committed = logManager.handleClientRequest(clientEntry);
+        if (committed) {
             return ResponseEntity.ok("Update committed");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Update failed: " + e.getMessage());
+        } else {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                 .body("Update failed (not committed or leadership lost)");
         }
     }
-
+    
     @PostMapping("/delete")
     public ResponseEntity<String> delete(@RequestParam String key) {
         if (raftNode.getRole() != Role.LEADER) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not leader");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not the leader");
         }
-
-        LogEntry clientEntry = new LogEntry(raftNode.getCurrentTerm(), key, value, LogEntry.Operation.DELETE);
-        try {
-            logManager.handleClientRequest(clientEntry);
+    
+        LogEntry clientEntry = new LogEntry(
+            raftNode.getCurrentTerm(),
+            key,
+            null,
+            LogEntry.Operation.DELETE
+        );
+    
+        boolean committed = logManager.handleClientRequest(clientEntry);
+        if (committed) {
             return ResponseEntity.ok("Delete committed");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Delete failed: " + e.getMessage());
+        } else {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                 .body("Delete failed (not committed or leadership lost)");
         }
     }
 }
