@@ -26,7 +26,6 @@ public class RaftInitializer {
                 "http://node2:8080", 
                 "http://node3:8080", 
                 "http://node4:8080", 
-                "http://node5:8080"
             );
             nodeState.setPeerUrls(defaultPeers);
             System.out.println("Peer URLs set to defaults: " + defaultPeers);
