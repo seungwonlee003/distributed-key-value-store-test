@@ -18,6 +18,7 @@ public class RaftStateManager {
     private final RaftNodeState state;
     private final HeartbeatManager heartbeatManager;
     private final ElectionTimer electionTimer;
+    private final RaftLogManager raftLogManager;
 
     // =================== Raft Role Transitions =================== //
 
