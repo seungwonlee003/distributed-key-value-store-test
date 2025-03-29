@@ -14,7 +14,9 @@ import java.util.stream.Collectors;
 public class RaftLogManager {
     private final RaftConfig raftConfig;
     private final RaftLog raftLog;
-    private final RaftNode raftNode;
+    private final RaftStateManager raftStateManager;
+    private final RaftNodeState raftNodeState;
+    private final RestTemplate restTemplate;
     private final StateMachine stateMachine;
     private final Map<String, Integer> nextIndex;
     private final Map<String, Integer> matchIndex;
@@ -22,17 +24,15 @@ public class RaftLogManager {
     private final Map<String, Boolean> pendingReplication = new ConcurrentHashMap<>();
     private final ExecutorService applyExecutor = Executors.newSingleThreadExecutor();
 
-    public RaftLogManager(RaftNode raftNode, RaftLog raftLog) {
-        this.raftNode = raftNode;
-        this.raftLog = raftLog;
+    public RaftLogManager() {
         this.nextIndex = new ConcurrentHashMap<>();
         this.matchIndex = new ConcurrentHashMap<>();
-        this.replicationExecutor = Executors.newScheduledThreadPool(raftNode.getPeerUrls().size());
+        this.replicationExecutor = Executors.newScheduledThreadPool(raftNodeState.getPeerUrls().size());
     }
 
     public void initializeIndices() {
         int lastLogIndex = raftLog.getLastIndex();
-        for (String peerUrl : raftNode.getPeerUrls()) {
+        for (String peerUrl : raftNodeState.getPeerUrls()) {
             nextIndex.put(peerUrl, lastLogIndex + 1);
             matchIndex.put(peerUrl, 0);
         }
@@ -46,7 +46,7 @@ public class RaftLogManager {
         long timeoutMillis = raftConfig.getClientRequestTimeoutMillis(); 
 
         // wait for at most 5 seconds for the client's write to be acknowledged by the majority
-        while (raftNode.getRole() == Role.LEADER) {
+        while (raftNodeState.getRole() == Role.LEADER) {
             if (raftLog.getCommitIndex() >= entryIndex) {
                 return true;
             }
@@ -66,9 +66,9 @@ public class RaftLogManager {
     }
     
     public void startLogReplication() {
-        if (raftNode.getRole() != Role.LEADER) return;
+        if (raftNodeState.getRole() != Role.LEADER) return;
 
-        for (String peerUrl : raftNode.getPeerUrls()) {
+        for (String peerUrl : raftNodeState.getPeerUrls()) {
             if (!pendingReplication.getOrDefault(peerUrl, false)) {
                 pendingReplication.put(peerUrl, true);
                 replicationExecutor.submit(() -> replicateToFollowerLoop(peerUrl));
@@ -79,7 +79,7 @@ public class RaftLogManager {
     private void replicateToFollowerLoop(String peerUrl) {
         // the frequency of heartbeats depends on replicateToFollowerLoop
         int backoffMs = raftConfig.getHeartbeatIntervalMillis();
-        while (raftNode.getRole() == Role.LEADER) {
+        while (raftNodeState.getRole() == Role.LEADER) {
             boolean success = replicateToFollower(peerUrl);
             if (success) {
                 backoffMs = raftConfig.getHeartbeatIntervalMillis();
@@ -99,7 +99,7 @@ public class RaftLogManager {
     }
 
     private boolean replicateToFollower(String peerUrl) {
-        if (raftNode.getRole() != Role.LEADER) return false;
+        if (raftNodeState.getRole() != Role.LEADER) return false;
 
         int ni = nextIndex.get(peerUrl);
         int prevLogIndex = ni - 1;
@@ -107,8 +107,8 @@ public class RaftLogManager {
         List<LogEntry> entries = raftLog.getEntriesFrom(ni);
 
         AppendEntryDTO dto = new AppendEntryDTO(
-            raftNode.getCurrentTerm(),
-            raftNode.getNodeId(),
+            raftNodeState.getCurrentTerm(),
+            raftNodeState.getNodeId(),
             prevLogIndex,
             prevLogTerm,
             entries,
@@ -117,8 +117,8 @@ public class RaftLogManager {
 
         try {
             AppendEntryResponseDTO response = sendAppendEntries(peerUrl, dto);
-            if (response.getTerm() > raftNode.getCurrentTerm()) {
-                raftNode.becomeFollower(response.getTerm());
+            if (response.getTerm() > raftNodeState.getCurrentTerm()) {
+                raftStateManager.becomeFollower(response.getTerm());
                 return false;
             }
 
@@ -139,7 +139,7 @@ public class RaftLogManager {
         try {
             String url = peerUrl + "/raft/appendEntries";
             ResponseEntity<AppendEntryResponseDTO> response =
-                raftNode.getRestTemplate().postForEntity(url, dto, AppendEntryResponseDTO.class);
+                restTemplate.postForEntity(url, dto, AppendEntryResponseDTO.class);
             return response.getBody() != null ? response.getBody() : new AppendEntryResponseDTO(-1, false);
         } catch (Exception e) {
             return new AppendEntryResponseDTO(-1, false);
@@ -147,8 +147,8 @@ public class RaftLogManager {
     }
 
     private void updateCommitIndex() {
-        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
-        int currentTerm = raftNode.getCurrentTerm();
+        int majority = (raftNodeState.getPeerUrls().size() + 1) / 2 + 1;
+        int currentTerm = raftNodeState.getCurrentTerm();
     
         for (int i = raftLog.getLastIndex(); i > raftLog.getCommitIndex(); i--) {
             int count = 1;
@@ -168,12 +168,12 @@ public class RaftLogManager {
     private void applyCommittedEntries() {
         applyExecutor.submit(() -> {
             int commitIndex = raftLog.getCommitIndex();
-            int lastApplied = raftNode.getLastApplied();
+            int lastApplied = raftNodeState.getLastApplied();
             for (int i = lastApplied + 1; i <= commitIndex; i++) {
                 try {
                     LogEntry entry = raftLog.getEntryAt(i);
                     stateMachine.apply(entry);
-                    raftNode.setLastApplied(i);
+                    raftNodeState.setLastApplied(i);
                 } catch (Exception e) {
                     System.out.println("State machine apply failed at index " + i + ": " + e.getMessage());
                     System.exit(1);
@@ -183,7 +183,7 @@ public class RaftLogManager {
     }
 
     public synchronized AppendEntryResponseDTO handleAppendEntries(AppendEntryDTO dto) {
-        int currentTerm = raftNode.getCurrentTerm();
+        int currentTerm = raftNodeState.getCurrentTerm();
         int leaderTerm = dto.getTerm();
         int prevLogIndex = dto.getPrevLogIndex();
         int prevLogTerm = dto.getPrevLogTerm();
@@ -195,7 +195,7 @@ public class RaftLogManager {
         }
 
         if (leaderTerm > currentTerm) {
-            raftNode.becomeFollower(leaderTerm);
+            raftStateManager.becomeFollower(leaderTerm);
             currentTerm = leaderTerm;
         }
 
@@ -212,7 +212,7 @@ public class RaftLogManager {
             applyCommittedEntries();
         }
 
-        raftNode.resetElectionTimer();
+        raftStateManager.resetElectionTimer();
         return new AppendEntryResponseDTO(currentTerm, true);
     }
 
