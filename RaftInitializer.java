@@ -5,7 +5,7 @@ import javax.annotation.PostConstruct;
 import java.util.Arrays;
 import java.util.List;
 
-@Service
+@Configuration
 public class RaftInitializer {
 
     private final RaftNode raftNode;
