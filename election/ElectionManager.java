@@ -11,10 +11,11 @@ import java.util.concurrent.TimeUnit;
 public class ElectionManager {
     private final RaftConfig raftConfig;
     private final RaftLog raftLog;
-    private final RaftNode raftNode;
+    private final RaftNodeState nodeState;
+    private final RestTemplate restTemplate;
 
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
-        int currentTerm = raftNode.getCurrentTerm();
+        int currentTerm = nodeState.getCurrentTerm();
         int requestTerm = requestVote.getTerm();
         int candidateId = requestVote.getCandidateId();
         int candidateLastTerm = requestVote.getLastLogTerm();
@@ -29,7 +30,7 @@ public class ElectionManager {
             currentTerm = requestTerm; 
         }
 
-        Integer votedFor = raftNode.getVotedFor();
+        Integer votedFor = nodeState.getVotedFor();
         if (votedFor != null && !votedFor.equals(candidateId)) {
             return new VoteResponseDTO(currentTerm, false);
         }
@@ -41,28 +42,28 @@ public class ElectionManager {
             return new VoteResponseDTO(currentTerm, false);
         }
 
-        raftNode.setVotedFor(candidateId); 
+        nodeState.setVotedFor(candidateId); 
         raftNode.resetElectionTimer();
         return new VoteResponseDTO(currentTerm, true);
     }
 
     private void startElection() {
         synchronized (this) {
-            if (raftNode.getRole() == Role.LEADER) return;
+            if (nodeState.getRole() == Role.LEADER) return;
     
-            raftNode.setCurrentRole(Role.CANDIDATE);
-            raftNode.incrementTerm();
-            raftNode.setVotedFor(raftNode.getNodeId());
+            nodeState.setCurrentRole(Role.CANDIDATE);
+            nodeState.incrementTerm();
+            nodeState.setVotedFor(nodeState.getNodeId());
     
-            int currentTerm = raftNode.getCurrentTerm();
+            int currentTerm = nodeState.getCurrentTerm();
             List<CompletableFuture<VoteResponseDTO>> voteFutures = new ArrayList<>();
             ExecutorService executor = raftNode.getAsyncExecutor();
     
-            for (String peerUrl : raftNode.getPeerUrls()) {
+            for (String peerUrl : nodeState.getPeerUrls()) {
                 CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
                     .supplyAsync(() -> requestVote(
                         currentTerm,
-                        raftNode.getNodeId(),
+                        nodeState.getNodeId(),
                         raftLog.getLastIndex(),
                         raftLog.getLastTerm(),
                         peerUrl
@@ -72,13 +73,13 @@ public class ElectionManager {
                 voteFutures.add(voteFuture);
             }
     
-            int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
+            int majority = (nodeState.getPeerUrls().size() + 1) / 2 + 1;
             AtomicInteger voteCount = new AtomicInteger(1); // Self-vote
     
             for (CompletableFuture<VoteResponseDTO> future : voteFutures) {
                 future.thenAccept(response -> {
                     synchronized (this) {
-                        if (raftNode.getRole() != Role.CANDIDATE || raftNode.getCurrentTerm() != currentTerm) {
+                        if (nodeState.getRole() != Role.CANDIDATE || nodeState.getCurrentTerm() != currentTerm) {
                             return;
                         }
                         if (response != null && response.isVoteGranted()) {
@@ -97,10 +98,10 @@ public class ElectionManager {
         try {
             String url = peerUrl + "/raft/requestVote";
             RequestVoteDTO dto = new RequestVoteDTO(term, candidateId, lastLogIndex, lastLogTerm);
-            ResponseEntity<VoteResponseDTO> response = raftNode.getRestTemplate().postForEntity(url, dto, VoteResponseDTO.class);
+            ResponseEntity<VoteResponseDTO> response = restTemplate.postForEntity(url, dto, VoteResponseDTO.class);
             VoteResponseDTO body = response.getBody() != null ? response.getBody() : new VoteResponseDTO(term, false);
 
-            if (body.getTerm() > raftNode.getCurrentTerm()) {
+            if (body.getTerm() > nodeState.getCurrentTerm()) {
                 raftNode.becomeFollower(body.getTerm());
             }
             return body;
