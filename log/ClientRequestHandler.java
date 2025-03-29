@@ -1,13 +1,9 @@
+@Service
+@RequiredArgsConstructor
 public class ClientRequestHandler {
     private final RaftLog raftLog;
     private final RaftNodeState raftNodeState;
     private final RaftConfig raftConfig;
-
-    public ClientRequestHandler(RaftLog raftLog, RaftNodeState nodeState, RaftConfig config) {
-        this.raftLog = raftLog;
-        this.raftNodeState = nodeState;
-        this.raftConfig = config;
-    }
 
     public boolean handle(LogEntry clientEntry) {
         raftLog.append(clientEntry);
