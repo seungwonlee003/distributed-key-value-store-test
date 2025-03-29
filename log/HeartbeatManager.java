@@ -6,7 +6,7 @@ public class HeartbeatManager {
     private final RaftLogManager raftLogManager;
     private final RaftNodeState raftNodeState;
     private final ElectionManager electionManager;
-    ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> heartbeatFuture;
 
     // for starting heartbeats only
