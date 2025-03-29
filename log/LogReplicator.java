@@ -1,5 +1,6 @@
+@Service
 @RequiredArgsConstructor
-public class LogReplicator {
+    public class LogReplicator {
     private final RaftConfig config;
     private final RaftLog log;
     private final RaftStateManager stateManager;
