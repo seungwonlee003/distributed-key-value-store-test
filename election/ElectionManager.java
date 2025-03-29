@@ -12,6 +12,7 @@ public class ElectionManager {
     private final RaftConfig raftConfig;
     private final RaftLog raftLog;
     private final RaftNodeState nodeState;
+    private final RaftStateManager stateManager;
     private final RestTemplate restTemplate;
 
     public synchronized VoteResponseDTO handleVoteRequest(RequestVoteDTO requestVote) {
@@ -26,7 +27,7 @@ public class ElectionManager {
         }
 
         if (requestTerm > currentTerm) {
-            raftNode.becomeFollower(requestTerm);
+            stateManager.becomeFollower(requestTerm);
             currentTerm = requestTerm; 
         }
 
@@ -43,11 +44,11 @@ public class ElectionManager {
         }
 
         nodeState.setVotedFor(candidateId); 
-        raftNode.resetElectionTimer();
+        stateManager.resetElectionTimer();
         return new VoteResponseDTO(currentTerm, true);
     }
 
-    private void startElection() {
+    public void startElection() {
         synchronized (this) {
             if (nodeState.getRole() == Role.LEADER) return;
     
@@ -84,14 +85,14 @@ public class ElectionManager {
                         }
                         if (response != null && response.isVoteGranted()) {
                             if (voteCount.incrementAndGet() >= majority) {
-                                raftNode.becomeLeader();
+                                stateManager.becomeLeader();
                             }
                         }
                     }
                 });
             }
             
-        raftNode.resetElectionTimer();
+        stateManager.resetElectionTimer();
     }
 
     private VoteResponseDTO requestVote(int term, int candidateId, int lastLogIndex, int lastLogTerm, String peerUrl) {
@@ -102,7 +103,7 @@ public class ElectionManager {
             VoteResponseDTO body = response.getBody() != null ? response.getBody() : new VoteResponseDTO(term, false);
 
             if (body.getTerm() > nodeState.getCurrentTerm()) {
-                raftNode.becomeFollower(body.getTerm());
+                stateManager.becomeFollower(body.getTerm());
             }
             return body;
         } catch (Exception e) {
