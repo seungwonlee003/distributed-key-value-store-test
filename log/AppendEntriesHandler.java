@@ -3,6 +3,7 @@ public class AppendEntriesHandler {
     private final RaftStateManager stateManager;
     private final RaftNodeState nodeState;
     private final StateMachine stateMachine;
+    private final ExecutorService applyExecutor = Executors.newSingleThreadExecutor();
 
     public AppendEntriesHandler(RaftLog log, RaftStateManager sm, RaftNodeState ns, StateMachine smachine) {
         this.log = log;
@@ -39,23 +40,23 @@ public class AppendEntriesHandler {
         if (dto.getLeaderCommit() > log.getCommitIndex()) {
             int lastNew = dto.getPrevLogIndex() + entries.size();
             log.setCommitIndex(Math.min(dto.getLeaderCommit(), lastNew));
-            applyCommittedEntries();
+            applyExecutor.submit(() -> applyEntries());
         }
 
         stateManager.resetElectionTimer();
         return new AppendEntryResponseDTO(term, true);
     }
 
-    private void applyCommittedEntries() {
-        int commitIndex = log.getCommitIndex();
+    private void applyEntries() {
+        int commit = log.getCommitIndex();
         int lastApplied = nodeState.getLastApplied();
-        for (int i = lastApplied + 1; i <= commitIndex; i++) {
+        for (int i = lastApplied + 1; i <= commit; i++) {
             try {
                 LogEntry entry = log.getEntryAt(i);
                 stateMachine.apply(entry);
                 nodeState.setLastApplied(i);
             } catch (Exception e) {
-                System.out.println("Apply failed at index " + i);
+                System.out.println("Failed to apply entry " + i);
                 System.exit(1);
             }
         }
