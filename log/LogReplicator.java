@@ -1,3 +1,4 @@
+@RequiredArgsConstructor
 public class LogReplicator {
     private final RaftConfig config;
     private final RaftLog log;
@@ -5,20 +6,19 @@ public class LogReplicator {
     private final RaftNodeState nodeState;
     private final RestTemplate restTemplate;
     private final StateMachine stateMachine;
+
+    // Initialized directly in field declaration
     private final Map<String, Integer> nextIndex = new ConcurrentHashMap<>();
     private final Map<String, Integer> matchIndex = new ConcurrentHashMap<>();
     private final Map<String, Boolean> pendingReplication = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService executor;
     private final ExecutorService applyExecutor = Executors.newSingleThreadExecutor();
 
-    public LogReplicator(RaftConfig config, RaftLog log, RaftStateManager sm, RaftNodeState ns, RestTemplate rt, StateMachine smachine) {
-        this.config = config;
-        this.log = log;
-        this.stateManager = sm;
-        this.nodeState = ns;
-        this.restTemplate = rt;
-        this.stateMachine = smachine;
-        this.executor = Executors.newScheduledThreadPool(ns.getPeerUrls().size());
+    // Cannot be final due to dynamic init
+    private ScheduledExecutorService executor;
+
+    @PostConstruct
+    private void initExecutor() {
+        this.executor = Executors.newScheduledThreadPool(nodeState.getPeerUrls().size());
     }
 
     public void initializeIndices() {
