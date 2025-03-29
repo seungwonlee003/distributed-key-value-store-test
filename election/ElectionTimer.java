@@ -2,6 +2,7 @@ import java.util.Random;
 import java.util.concurrent.*;
 
 @Component
+@RequiredArgsConstructor
 public class ElectionTimer {
     private final RaftConfig raftConfig;
     private final RaftNode raftNode;
@@ -9,12 +10,6 @@ public class ElectionTimer {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final Random random = new Random();
     private ScheduledFuture<?> electionFuture;
-
-    public ElectionTimer(RaftNode raftNode, ElectionManager electionManager) {
-        this.raftNode = raftNode;
-        this.electionManager = electionManager;
-        this.heartbeatManager = heartbeatManager;
-    }
 
     public synchronized void reset() {
         cancel();
