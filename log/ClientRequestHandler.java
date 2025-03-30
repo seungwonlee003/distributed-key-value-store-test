@@ -12,9 +12,9 @@ public class ClientRequestHandler {
         long start = System.currentTimeMillis();
         long timeoutMillis = raftConfig.getClientRequestTimeoutMillis(); 
 
-        // wait for at most 5 seconds for the client's write to be acknowledged by the majority
         while (raftNodeState.getRole() == Role.LEADER) {
-            if (raftLog.getCommitIndex() >= entryIndex) {
+            // ensures linearizability by default
+            if (raftNodeState.getLastApplied() >= entryIndex) {
                 return true;
             }
             if (System.currentTimeMillis() - start > timeoutMillis) {
@@ -22,7 +22,7 @@ public class ClientRequestHandler {
             }
     
             try {
-                Thread.sleep(1000);
+                Thread.sleep(300);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
