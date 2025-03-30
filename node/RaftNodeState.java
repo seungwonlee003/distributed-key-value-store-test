@@ -11,4 +11,8 @@ public class RaftNodeState {
     private Integer currentLeader = null;
     private int lastApplied = 0;
     private List<String> peerUrls; // Assuming URLs
+
+    public boolean isLeader(){
+        return nodeId == currentLeader;
+    }
 }
