@@ -29,4 +29,8 @@ public class RaftConfig {
     private long replicationBackoffMaxMillis;   // 3000
 
     private boolean enableFollowerReads;
+   
+    public Collection<String> getPeerUrlList() {
+        return peerUrls.values();
+    }
 }
