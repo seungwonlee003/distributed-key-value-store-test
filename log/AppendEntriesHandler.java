@@ -35,7 +35,7 @@ public class AppendEntriesHandler {
         if (dto.getLeaderCommit() > log.getCommitIndex()) {
             int lastNew = dto.getPrevLogIndex() + entries.size();
             log.setCommitIndex(Math.min(dto.getLeaderCommit(), lastNew));
-            applyEntries();
+            applyExecutor.submit(() -> applyEntries());
         }
 
         stateManager.resetElectionTimer();
