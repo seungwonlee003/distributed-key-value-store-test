@@ -18,7 +18,7 @@ public class RaftConfig {
 
     private Integer nodeId;
 
-    private List<String> peerUrls;
+    private Map<Integer, String> peerUrls;
 
     private long electionTimeoutMillisMin;      // 3000
     private long electionTimeoutMillisMax;      // 5000
