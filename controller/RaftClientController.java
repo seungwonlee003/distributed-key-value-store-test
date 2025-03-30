@@ -1,6 +1,6 @@
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/raft")
+@RequestMapping("/raft/client")
 public class RaftClientController {
     private final RaftNode raftNode;
     private final RaftLogManager logManager;
