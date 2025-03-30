@@ -6,7 +6,7 @@ public class RaftClientController {
     private final RaftLogManager logManager;
     private final RaftKVService raftKVService;
     
-    @GetMapping("/read")
+    @GetMapping("/get")
     public ResponseEntity<String> read(@RequestParam String key){
         String val = raftKVService.handleRead(key);
         return ResponseEntity.ok(val);
