@@ -10,8 +10,12 @@ public class RaftNodeState {
     private Role currentRole = Role.FOLLOWER;
     private Integer currentLeader = null;
     private int lastApplied = 0;
-    private List<String> peerUrls; // Assuming URLs
-
+    Map<Integer, String> peerUrls; 
+    
+    public Collection<String> getPeerUrlList() {
+        return peerUrls.values();
+    }
+    
     public boolean isLeader(){
         return nodeId == currentLeader;
     }
