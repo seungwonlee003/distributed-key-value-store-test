@@ -27,4 +27,6 @@ public class RaftConfig {
     private long electionRpcTimeoutMillis;      // 2000
     private long clientRequestTimeoutMillis;    // 2000
     private long replicationBackoffMaxMillis;   // 3000
+
+    private boolean enableFollowerReads;
 }
