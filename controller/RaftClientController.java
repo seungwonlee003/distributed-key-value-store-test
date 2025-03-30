@@ -4,6 +4,13 @@
 public class RaftClientController {
     private final RaftNode raftNode;
     private final RaftLogManager logManager;
+    private final ConsistencyService consistencyService;
+    
+    @GetMapping("/read")
+    public ResponseEntity<String> read(@RequestParam String key){
+        String val = consistencyService.read(key);
+        return ResponseEntity.ok(val);
+    }
 
     @PostMapping("/insert")
     public ResponseEntity<String> insert(@RequestParam String key, @RequestParam String value) {
