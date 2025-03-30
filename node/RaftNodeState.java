@@ -10,7 +10,6 @@ public class RaftNodeState {
     private Role currentRole = Role.FOLLOWER;
     private Integer currentLeader = null;
     private int lastApplied = 0;
-    Map<Integer, String> peerUrls; 
     
     public Collection<String> getPeerUrlList() {
         return peerUrls.values();
