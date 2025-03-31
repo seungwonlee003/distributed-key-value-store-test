@@ -97,7 +97,6 @@ public class RaftKVService {
         int currentTerm = raftNodeState.getCurrentTerm();
         int confirmations = 1; // count self
 
-        // Iterate over peer URLs from the config map.
         for (String peerUrl : raftConfig.getPeerUrlList()) {
             try {
                 HeartbeatResponse response = restTemplate.postForObject(
@@ -116,5 +115,20 @@ public class RaftKVService {
         if (confirmations < majority) {
             throw new IllegalStateException("Leadership not confirmed: quorum not achieved");
         }
+    }
+
+    public HeartbeatResponse handleConfirmLeadership(ConfirmLeadershipRequest request) {
+        if (raftNodeState.getCurrentRole() != Role.FOLLOWER) {
+            return new HeartbeatResponse(false, raftNodeState.getCurrentTerm());
+        }
+        
+        boolean success = request.getTerm() == raftNodeState.getCurrentTerm();
+        
+        if (raftNodeState.getCurrentLeader() != null &&
+            !raftNodeState.getCurrentLeader().equals(request.getNodeId())) {
+            success = false;
+        }
+        
+        return new HeartbeatResponse(success, raftNodeState.getCurrentTerm());
     }
 }
