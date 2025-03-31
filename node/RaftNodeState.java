@@ -3,13 +3,13 @@
 @Component
 @RequiredArgsConstructor
 public class RaftNodeState {
-    // non-volatile
-    private final int nodeId;
-    private int currentTerm = 0;
-    private Integer votedFor = null;
+    // ──────────────── Non-volatile state ────────────────
+    private final int nodeId;            // fixed identity
+    private int currentTerm = 0;         // must be persisted
+    private Integer votedFor = null;     // must be persisted
 
-    // volatile
+    // ──────────────── Volatile state ─────────────────────
     private Role currentRole = Role.FOLLOWER;
-    private int currentLeader;
-    private int lastApplied = 0;
+    private Integer currentLeader = null;   // null = unknown
+    private int lastApplied = 0;            // not persisted
 }
