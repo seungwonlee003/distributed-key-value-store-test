@@ -60,7 +60,7 @@ public class ElectionManager {
             List<CompletableFuture<VoteResponseDTO>> voteFutures = new ArrayList<>();
             ExecutorService executor = Executors.newCachedThreadPool(); 
     
-            for (String peerUrl : nodeState.getPeerUrls()) {
+            for (String peerUrl : config.getPeerUrlList()) {
                 CompletableFuture<VoteResponseDTO> voteFuture = CompletableFuture
                     .supplyAsync(() -> requestVote(
                         currentTerm,
@@ -74,7 +74,7 @@ public class ElectionManager {
                 voteFutures.add(voteFuture);
             }
     
-            int majority = (nodeState.getPeerUrls().size() + 1) / 2 + 1;
+            int majority = (config.getPeerUrlList().size() + 1) / 2 + 1;
             AtomicInteger voteCount = new AtomicInteger(1); // Self-vote
     
             for (CompletableFuture<VoteResponseDTO> future : voteFutures) {
