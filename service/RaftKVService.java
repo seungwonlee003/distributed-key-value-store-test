@@ -4,8 +4,14 @@ import com.example.raft.config.RaftConfig;
 import com.example.raft.storage.KVStore;
 import com.example.raft.RaftNode;
 import com.example.raft.RaftLogManager;
+import com.example.raft.node.RaftNodeState;
+import com.example.raft.dto.ConfirmLeadershipRequest;
+import com.example.raft.dto.HeartbeatResponse;
+import com.example.raft.dto.ReadIndexResponseDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -19,8 +25,8 @@ public class RaftKVService {
 
     public String handleRead(String key) throws IllegalStateException {
         if (raftConfig.isEnableFollowerReads()) {
-            if (!raftNode.isLeader()) {
-                Integer readIndex = requestReadIndexFromLeader();
+            if (!raftNodeState.isLeader()) {
+                int readIndex = requestReadIndexFromLeader();
                 waitForLogToSync(readIndex);
                 return kvStore.get(key); 
             } else {
@@ -34,14 +40,7 @@ public class RaftKVService {
         }
     }
 
-    private ReadIndexResponseDTO handleReadIndex(){
-        Integer readIndex = raftLogManager.getCommitIndex();
-        confirmLeadership();
-        ReadIndexResponseDTO response = new ReadIndexResponseDTO(readIndex);
-        return response;
-    }
-
-    private Integer requestReadIndexFromLeader() {
+    private int requestReadIndexFromLeader() {
         String leaderUrl = raftNodeState.getCurrentLeaderUrl();
         if (leaderUrl == null) {
             throw new IllegalStateException("Leader unknown. Cannot perform follower read.");
@@ -64,44 +63,56 @@ public class RaftKVService {
         }
     }
 
-    private void waitForLogToSync(Integer readIndex) {
+    public ReadIndexResponseDTO getSafeReadIndex() {
+        if (!raftNodeState.isLeader()) {
+            throw new IllegalStateException("Not leader. Cannot serve read index request.");
+        }
+        confirmLeadership();
+        int readIndex = raftLogManager.getCommitIndex();
+        return new ReadIndexResponseDTO(readIndex);
+    }
+    
+    private void waitForLogToSync(int readIndex) {
         while (raftNodeState.getLastApplied() < readIndex) {
             try {
-                Thread.sleep(500);
+                Thread.sleep(100);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Interrupted while syncing log for read", e);
             }
         }
     }
-
+    
     private String performLeaderRead(String key) {
-        Integer readIndex = raftLogManager.getCommitIndex();
+        int readIndex = raftLogManager.getCommitIndex();
         confirmLeadership();
         waitForLogToSync(readIndex);
         return kvStore.get(key);
     }
 
     private void confirmLeadership() {
+        if (!raftNodeState.isLeader()) {
+            throw new IllegalStateException("Not leader.");
+        }
         int currentTerm = raftNodeState.getCurrentTerm();
-        int confirmations = 1; 
-    
-        for (String peerUrl : config.getPeerUrlList()) {
+        int confirmations = 1; // count self
+
+        // Iterate over peer URLs from the config map.
+        for (String peerUrl : raftConfig.getPeerUrlList()) {
             try {
                 HeartbeatResponse response = restTemplate.postForObject(
                     peerUrl + "/raft/confirmLeadership", 
-                    new confirmLeadershipRequest(raftNodeState.getNodeId(), currentTerm),
+                    new ConfirmLeadershipRequest(raftNodeState.getNodeId(), currentTerm),
                     HeartbeatResponse.class
                 );
                 if (response != null && response.isSuccess() && response.getTerm() == currentTerm) {
                     confirmations++;
                 }
             } catch (Exception ignored) {
-                // Node unreachable or failed, ignore
+                // Ignore unreachable peers.
             }
         }
-    
-        int majority = (raftNode.getPeerUrls().size() + 1) / 2 + 1;
+        int majority = (raftConfig.getPeerUrlMap().size() + 1) / 2 + 1;
         if (confirmations < majority) {
             throw new IllegalStateException("Leadership not confirmed: quorum not achieved");
         }
