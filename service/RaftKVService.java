@@ -42,7 +42,7 @@ public class RaftKVService {
     }
 
     private Integer requestReadIndexFromLeader() {
-        String leaderUrl = raftNodeState.getLeaderUrl();
+        String leaderUrl = raftNodeState.getCurrentLeaderUrl();
         if (leaderUrl == null) {
             throw new IllegalStateException("Leader unknown. Cannot perform follower read.");
         }
