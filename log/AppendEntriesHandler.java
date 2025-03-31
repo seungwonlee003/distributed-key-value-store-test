@@ -17,6 +17,9 @@ public class AppendEntriesHandler {
             term = leaderTerm;
         }
 
+        // set currentLeader
+        nodeState.setCurrentLeader(dto.getLeaderId());
+
         if (dto.getPrevLogIndex() > 0 &&
             (!log.containsEntryAt(dto.getPrevLogIndex()) ||
              log.getTermAt(dto.getPrevLogIndex()) != dto.getPrevLogTerm())) {
