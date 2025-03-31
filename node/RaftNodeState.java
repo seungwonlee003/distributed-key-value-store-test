@@ -8,10 +8,5 @@ public class RaftNodeState {
     private int currentTerm = 0;
     private Integer votedFor = null;
     private Role currentRole = Role.FOLLOWER;
-    private Integer currentLeader = null;
     private int lastApplied = 0;
-    
-    public boolean isLeader(){
-        return nodeId == currentLeader;
-    }
 }
