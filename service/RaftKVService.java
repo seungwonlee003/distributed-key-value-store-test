@@ -86,7 +86,7 @@ public class RaftKVService {
         int currentTerm = raftNodeState.getCurrentTerm();
         int confirmations = 1; 
     
-        for (String peerUrl : raftNode.getPeerUrls()) {
+        for (String peerUrl : config.getPeerUrlList()) {
             try {
                 HeartbeatResponse response = restTemplate.postForObject(
                     peerUrl + "/raft/confirmLeadership", 
