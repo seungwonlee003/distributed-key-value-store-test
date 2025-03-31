@@ -19,12 +19,12 @@
 
     @PostConstruct
     private void initExecutor() {
-        this.executor = Executors.newScheduledThreadPool(nodeState.getPeerUrls().size());
+        this.executor = Executors.newScheduledThreadPool(config.getPeerUrlList().size());
     }
 
     public void initializeIndices() {
         int lastIndex = log.getLastIndex();
-        for (String peer : nodeState.getPeerUrls()) {
+        for (String peer : config.getPeerUrlList()) {
             nextIndex.put(peer, lastIndex + 1);
             matchIndex.put(peer, 0);
         }
@@ -32,7 +32,7 @@
 
     public void start() {
         if (nodeState.getRole() != Role.LEADER) return;
-        for (String peer : nodeState.getPeerUrls()) {
+        for (String peer : config.getPeerUrlList()) {
             if (!pendingReplication.getOrDefault(peer, false)) {
                 pendingReplication.put(peer, true);
                 executor.submit(() -> replicateLoop(peer));
@@ -93,7 +93,7 @@
     }
 
     private void updateCommitIndex() {
-        int majority = (nodeState.getPeerUrls().size() + 1) / 2 + 1;
+        int majority = (config.getPeerUrlList().size() + 1) / 2 + 1;
         int term = nodeState.getCurrentTerm();
         for (int i = log.getLastIndex(); i > log.getCommitIndex(); i--) {
             int count = 1;
