@@ -24,4 +24,8 @@ public class RaftNodeState {
     public String getCurrentLeaderUrl(){
         return config.getPeerUrls().get(currentLeader);
     }
+
+    public boolean isLeader(){
+        return currentRole.equals(Role.LEADER);
+    }
 }
