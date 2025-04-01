@@ -84,8 +84,8 @@ public class RaftKVService {
     }
     
     private String performLeaderRead(String key) {
-        int readIndex = raftLogManager.getCommitIndex();
         confirmLeadership();
+        int readIndex = raftLogManager.getCommitIndex();
         waitForLogToSync(readIndex);
         return kvStore.get(key);
     }
@@ -94,6 +94,7 @@ public class RaftKVService {
         if (!raftNodeState.isLeader()) {
             throw new IllegalStateException("Not leader.");
         }
+        
         int currentTerm = raftNodeState.getCurrentTerm();
         int confirmations = 1; // count self
 
@@ -106,29 +107,33 @@ public class RaftKVService {
                 );
                 if (response != null && response.isSuccess() && response.getTerm() == currentTerm) {
                     confirmations++;
-                }
+                } else if(response.getTerm() > currentTerm){
+                    stateManager.becomeFollower(response.getTerm());
+                    throw new IllegalStateException("Split brain scenario");
+                } 
             } catch (Exception ignored) {
                 // Ignore unreachable peers.
             }
         }
-        int majority = (raftConfig.getPeerUrlMap().size() + 1) / 2 + 1;
+        int majority = (raftConfig.getPeerUrlMap().size()) / 2 + 1;
         if (confirmations < majority) {
             throw new IllegalStateException("Leadership not confirmed: quorum not achieved");
         }
     }
 
     public HeartbeatResponse handleConfirmLeadership(ConfirmLeadershipRequest request) {
+        if (request.getTerm() > raftNodeState.getCurrentTerm()) {
+            stateManager.becomeFollower(request.getTerm());
+            return new HeartbeatResponse(false, request.getTerm());
+        }
         if (raftNodeState.getCurrentRole() != Role.FOLLOWER) {
             return new HeartbeatResponse(false, raftNodeState.getCurrentTerm());
         }
-        
         boolean success = request.getTerm() == raftNodeState.getCurrentTerm();
-        
         if (raftNodeState.getCurrentLeader() != null &&
             !raftNodeState.getCurrentLeader().equals(request.getNodeId())) {
             success = false;
         }
-        
         return new HeartbeatResponse(success, raftNodeState.getCurrentTerm());
     }
 }
