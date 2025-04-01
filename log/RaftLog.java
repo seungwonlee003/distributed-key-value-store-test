@@ -83,9 +83,6 @@ public class RaftLog {
 
     // Disk I/O Methods
 
-    /**
-     * Writes a single entry to disk with its index.
-     */
     private void writeEntryToDisk(int index, LogEntry entry) {
         try (RandomAccessFile raf = new RandomAccessFile(logFile, "rw");
              FileChannel channel = raf.getChannel()) {
@@ -98,9 +95,6 @@ public class RaftLog {
         }
     }
 
-    /**
-     * Writes multiple entries to disk with consecutive indices.
-     */
     private void writeEntriesToDisk(int startIndex, List<LogEntry> entries) {
         try (RandomAccessFile raf = new RandomAccessFile(logFile, "rw");
              FileChannel channel = raf.getChannel()) {
