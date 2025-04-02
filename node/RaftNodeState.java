@@ -1,10 +1,17 @@
 package com.example.raft;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 @Getter
@@ -12,17 +19,18 @@ import java.util.Objects;
 @Component
 public class RaftNodeState {
     private RaftConfig config;
-    // Non-volatile state (persisted)
+    // Non-volatile state
     private final int nodeId;
     private int currentTerm = 0;
     private Integer votedFor = null;
-    private int lastApplied = 0; 
+    private int lastApplied = 0;
 
-    // Volatile state (not persisted)
+    // Volatile state
     private Role currentRole = Role.FOLLOWER;
     private Integer currentLeader = null;
 
-    private final File stateFile = new File("raft_node_state.bin");
+    private final File stateFile = new File("raft_node_state.txt");
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     public RaftNodeState(int nodeId, RaftConfig config) {
         this.nodeId = nodeId;
@@ -33,7 +41,7 @@ public class RaftNodeState {
     @PostConstruct
     private void init() {
         if (!stateFile.exists()) {
-            persistToDisk();
+            persistToDisk(); // Write initial state if no file exists
         }
     }
 
@@ -73,16 +81,23 @@ public class RaftNodeState {
     }
 
     private void persistToDisk() {
-        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(stateFile))) {
-            dos.writeInt(nodeId);
-            dos.writeInt(currentTerm);
-            dos.writeBoolean(votedFor != null);
-            if (votedFor != null) {
-                dos.writeInt(votedFor);
-            }
-            dos.writeInt(lastApplied); // Persist lastApplied
-            dos.flush();
-            dos.getFD().sync(); // Ensure durability
+        try (FileOutputStream fos = new FileOutputStream(stateFile);
+             FileChannel channel = fos.getChannel()) {
+            // Create a map of the state to serialize as JSON
+            Map<String, Object> state = new HashMap<>();
+            state.put("nodeId", nodeId);
+            state.put("currentTerm", currentTerm);
+            state.put("votedFor", votedFor); // Null is preserved in JSON
+            state.put("lastApplied", lastApplied);
+
+            // Convert to JSON string
+            String jsonState = mapper.writeValueAsString(state);
+            byte[] bytes = jsonState.getBytes(StandardCharsets.UTF_8);
+            ByteBuffer buffer = ByteBuffer.wrap(bytes);
+
+            // Write to file and ensure durability
+            channel.write(buffer);
+            channel.force(true); // Replaces dos.getFD().sync()
         } catch (IOException e) {
             throw new RuntimeException("Failed to persist RaftNodeState to disk", e);
         }
@@ -90,16 +105,23 @@ public class RaftNodeState {
 
     private void recoverFromDisk() {
         if (stateFile.exists()) {
-            try (DataInputStream dis = new DataInputStream(new FileInputStream(stateFile))) {
-                int storedNodeId = dis.readInt();
+            try (FileInputStream fis = new FileInputStream(stateFile)) {
+                // Read the entire file into a byte array
+                byte[] bytes = fis.readAllBytes();
+                String jsonState = new String(bytes, StandardCharsets.UTF_8);
+
+                // Parse JSON back into a map
+                Map<String, Object> state = mapper.readValue(jsonState, Map.class);
+
+                // Verify nodeId and set fields
+                int storedNodeId = ((Number) state.get("nodeId")).intValue();
                 if (storedNodeId != nodeId) {
                     throw new RuntimeException("Node ID mismatch: expected " + nodeId + ", got " + storedNodeId);
                 }
-                currentTerm = dis.readInt();
-                boolean hasVotedFor = dis.readBoolean();
-                votedFor = hasVotedFor ? dis.readInt() : null;
-                lastApplied = dis.readInt(); // Recover lastApplied
-            } catch (IOException e) {
+                currentTerm = ((Number) state.get("currentTerm")).intValue();
+                votedFor = state.get("votedFor") != null ? ((Number) state.get("votedFor")).intValue() : null;
+                lastApplied = ((Number) state.get("lastApplied")).intValue();
+            } catch (IOException | JsonProcessingException e) {
                 throw new RuntimeException("Failed to recover RaftNodeState from disk", e);
             }
         }
