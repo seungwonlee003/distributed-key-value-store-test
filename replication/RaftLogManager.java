@@ -5,7 +5,7 @@
 
 @Service
 @RequiredArgsConstructor
-public class RaftLogManager {
+public class RaftReplicationManager {
     private final ClientRequestHandler clientRequestHandler;
     private final LogReplicator logReplicator;
     private final AppendEntriesHandler appendEntriesHandler;
