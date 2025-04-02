@@ -12,6 +12,7 @@ public class RaftLog {
     private final List<LogEntry> logEntries = new ArrayList<>();
     private int commitIndex = 0;
     private final File logFile = new File("raft_log.bin"); 
+    private static final int INT_SIZE = Integer.BYTES; // 4 bytes
 
     public RaftLog() {
         recoverFromDisk();
@@ -119,7 +120,7 @@ public class RaftLog {
         byte[] valueBytes = value != null ? value.getBytes(StandardCharsets.UTF_8) : null;
         int valueLen = valueBytes != null ? valueBytes.length : -1;
 
-        int totalSize = 4 + 4 + 4 + 4 + keyBytes.length + 4;
+        int totalSize = INT_SIZE + INT_SIZE + INT_SIZE + INT_SIZE + keyBytes.length + INT_SIZE;
         if (valueLen >= 0) {
             totalSize += valueLen;
         }
@@ -148,7 +149,7 @@ public class RaftLog {
                 byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8); // Explicit UTF-8 encoding
                 byte[] valueBytes = value != null ? value.getBytes(StandardCharsets.UTF_8) : null;
                 int valueLen = valueBytes != null ? valueBytes.length : -1;
-                offset += 4 + 4 + 4 + 4 + keyBytes.length + 4;
+                offset += INT_SIZE + INT_SIZE + INT_SIZE + INT_SIZE + keyBytes.length + INT_SIZE;
                 if (valueLen >= 0) {
                     offset += valueLen;
                 }
