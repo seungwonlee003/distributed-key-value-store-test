@@ -18,14 +18,14 @@ public class RaftStateManager {
     private final RaftNodeState state;
     private final HeartbeatManager heartbeatManager;
     private final ElectionTimer electionTimer;
-    private final RaftLogManager raftLogManager;
+    private final RaftReplicationManager raftReplicationManager;
 
     // =================== Raft Role Transitions =================== //
 
     public synchronized void becomeLeader() {
         state.setCurrentRole(Role.LEADER);
         System.out.printf("Node %s became leader for term %d%n", state.getNodeId(), state.getCurrentTerm());
-        raftLogManager.initializeIndices();
+        raftReplicationManager.initializeIndices();
         heartbeatManager.startHeartbeats();
     }
 
