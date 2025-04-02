@@ -110,19 +110,15 @@ public class RaftLog {
         }
     }
 
-    /**
-     * Serializes an entry with its index into a ByteBuffer.
-     */
     private ByteBuffer serializeEntry(int index, LogEntry entry) {
         int term = entry.getTerm();
         int operationOrdinal = entry.getOperation().ordinal();
         String key = entry.getKey();
         String value = entry.getValue();
-        byte[] keyBytes = key.getBytes();
-        byte[] valueBytes = value != null ? value.getBytes() : null;
+        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8); // Explicit UTF-8 encoding
+        byte[] valueBytes = value != null ? value.getBytes(StandardCharsets.UTF_8) : null;
         int valueLen = valueBytes != null ? valueBytes.length : -1;
 
-        // Calculate size: index (4), term (4), operation (4), keyLen (4), key, valueLen (4), value (if present)
         int totalSize = 4 + 4 + 4 + 4 + keyBytes.length + 4;
         if (valueLen >= 0) {
             totalSize += valueLen;
@@ -142,9 +138,6 @@ public class RaftLog {
         return buffer;
     }
 
-    /**
-     * Truncates the log file starting from the specified index.
-     */
     private void truncateLogFile(int fromIndex) {
         try (RandomAccessFile raf = new RandomAccessFile(logFile, "rw")) {
             long offset = 0;
@@ -152,10 +145,10 @@ public class RaftLog {
                 LogEntry entry = logEntries.get(i);
                 String key = entry.getKey();
                 String value = entry.getValue();
-                byte[] keyBytes = key.getBytes();
-                byte[] valueBytes = value != null ? value.getBytes() : null;
+                byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8); // Explicit UTF-8 encoding
+                byte[] valueBytes = value != null ? value.getBytes(StandardCharsets.UTF_8) : null;
                 int valueLen = valueBytes != null ? valueBytes.length : -1;
-                offset += 4 + 4 + 4 + 4 + keyBytes.length + 4; // index, term, op, keyLen, key, valueLen
+                offset += 4 + 4 + 4 + 4 + keyBytes.length + 4;
                 if (valueLen >= 0) {
                     offset += valueLen;
                 }
@@ -167,9 +160,6 @@ public class RaftLog {
         }
     }
 
-    /**
-     * Recovers the log from disk, ensuring indices match positions.
-     */
     private void recoverFromDisk() {
         logEntries.clear();
         if (logFile.exists()) {
@@ -186,13 +176,13 @@ public class RaftLog {
                     int keyLen = raf.readInt();
                     byte[] keyBytes = new byte[keyLen];
                     raf.readFully(keyBytes);
-                    String key = new String(keyBytes);
+                    String key = new String(keyBytes, StandardCharsets.UTF_8); // Explicit UTF-8 decoding
                     int valueLen = raf.readInt();
                     String value = null;
                     if (valueLen >= 0) {
                         byte[] valueBytes = new byte[valueLen];
                         raf.readFully(valueBytes);
-                        value = new String(valueBytes);
+                        value = new String(valueBytes, StandardCharsets.UTF_8); // Explicit UTF-8 decoding
                     }
                     LogEntry entry = new LogEntry(term, key, value, operation);
                     logEntries.add(entry);
