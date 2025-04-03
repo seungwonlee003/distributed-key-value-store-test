@@ -44,12 +44,7 @@
         int backoff = config.getHeartbeatIntervalMillis();
         while (nodeState.getRole() == Role.LEADER) {
             boolean ok = replicate(peer);
-            if (ok) {
-                backoff = config.getHeartbeatIntervalMillis();
-                updateCommitIndex();
-            } else {
-                backoff = Math.min(backoff * 2, config.getReplicationBackoffMaxMillis());
-            }
+            if (ok) updateCommitIndex();
             try { 
               Thread.sleep(backoff); 
             } catch (InterruptedException e) {
