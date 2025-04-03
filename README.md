@@ -1,8 +1,13 @@
+raft core demonstration:
+
 leader election
 
 log replication
 
-linearizable follower reads
+linearizable reads across all nodes 
+
+
+breif explanations on:
 
 log entries persistence via bin log
 
