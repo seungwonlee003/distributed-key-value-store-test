@@ -29,8 +29,8 @@ public class RaftNodeState {
     private static final int INT_SIZE = Integer.BYTES; // 4 bytes
     private static final int HEADER_SIZE = 5; // 4 bytes magic + 1 byte version
 
-    public RaftNodeState(int nodeId, RaftConfig config) {
-        this.nodeId = nodeId;
+    public RaftNodeState(RaftConfig config) {
+        this.nodeId = config.getNodeId();
         this.config = config;
         recoverFromDisk();
     }
@@ -38,14 +38,14 @@ public class RaftNodeState {
     @PostConstruct
     private void init() {
         if (!stateFile.exists()) {
-            persistToDisk(); // Write initial state if no file exists
+            persistToDisk();
         }
     }
 
     public void setCurrentTerm(int term) {
         if (term > currentTerm) {
             currentTerm = term;
-            votedFor = null; // Reset vote when term increases
+            votedFor = null;
             persistToDisk();
         }
     }
