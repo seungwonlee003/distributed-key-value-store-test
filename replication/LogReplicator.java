@@ -102,7 +102,7 @@
             }
             if (count >= majority && log.getTermAt(i) == term) {
                 log.setCommitIndex(i);
-                applyExecutor.submit(() -> applyEntries());
+                applyEntries();
                 break;
             }
         }
