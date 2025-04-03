@@ -5,11 +5,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 /**
- * RaftNode acts as the central coordinator for a server in the Raft consensus algorithm.
- *
- * It manages role transitions (leader, follower, candidate), tracks term and voting state.
- * 
- * RaftNode provides a clean interface to core Raft state so the client doesn't need to be aware of persistent and volatile states.
+ * RaftStateManager manages role transitions (leader, follower, candidate).
  */
 
 @Service
