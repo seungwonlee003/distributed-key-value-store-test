@@ -9,7 +9,6 @@ import java.util.Objects;
 import java.util.zip.CRC32;
 
 @Getter
-@Setter
 @Component
 public class RaftNodeState {
     private RaftConfig config;
@@ -48,6 +47,11 @@ public class RaftNodeState {
             votedFor = null;
             persistToDisk();
         }
+    }
+
+    public void incrementTerm(){
+        currentTer++;
+        persistToDisk();
     }
 
     public void setVotedFor(Integer votedFor) {
