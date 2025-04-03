@@ -13,13 +13,13 @@ import java.util.zip.CRC32;
 @Component
 public class RaftNodeState {
     private RaftConfig config;
-    // Non-volatile state (persisted)
+    // Non-volatile state
     private final int nodeId;
     private int currentTerm = 0;
     private Integer votedFor = null;
     private int lastApplied = 0;
 
-    // Volatile state (not persisted)
+    // Volatile state
     private Role currentRole = Role.FOLLOWER;
     private Integer currentLeader = null;
 
@@ -78,11 +78,12 @@ public class RaftNodeState {
     }
 
     private synchronized void persistToDisk() {
-        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(stateFile))) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
             // Write header
             dos.writeInt(MAGIC_HEADER);
             dos.writeByte(VERSION);
-
+    
             // Write state data
             dos.writeInt(nodeId);
             dos.writeInt(currentTerm);
@@ -91,66 +92,78 @@ public class RaftNodeState {
                 dos.writeInt(votedFor);
             }
             dos.writeInt(lastApplied);
-
-            // Compute and write checksum
-            byte[] data = ((ByteArrayOutputStream) dos.getUnderlyingOutputStream()).toByteArray();
-            CRC32 crc = new CRC32();
-            crc.update(data, 0, data.length - INT_SIZE); // Exclude checksum itself
-            dos.writeInt((int) crc.getValue()); // 4 bytes
-
-            dos.flush();
-            dos.getFD().sync(); // Ensure durability
+    
+            byte[] payload = baos.toByteArray();
+            int checksum = calculateChecksum(payload);
+    
+            try (DataOutputStream fileDos = new DataOutputStream(new FileOutputStream(stateFile))) {
+                fileDos.write(payload);
+                fileDos.writeInt(checksum);
+                fileDos.flush();
+                fileDos.getFD().sync(); // Ensure durability
+            }
         } catch (IOException e) {
             throw new RuntimeException("Failed to persist RaftNodeState to disk", e);
         }
     }
-
+    
     private void recoverFromDisk() {
-        if (stateFile.exists()) {
-            try (DataInputStream dis = new DataInputStream(new FileInputStream(stateFile))) {
-                if (dis.available() < HEADER_SIZE) {
-                    return; // File too small to be valid
-                }
+        if(!stateFile.exits()) return;
+        try (DataInputStream dis = new DataInputStream(new FileInputStream(stateFile))) {
+            long fileSize = stateFile.length();
+            if (fileSize < HEADER_SIZE + INT_SIZE * 3 + 1 + INT_SIZE) {
+                return;
+            }
 
+            // Read and store checksum first
+            dis.mark((int) fileSize);
+            dis.skipBytes((int) fileSize - INT_SIZE);
+            int storedChecksum = dis.readInt();
+            dis.reset();
+
+            // Read payload
+            byte[] payload = new byte[(int) fileSize - INT_SIZE];
+            dis.readFully(payload);
+
+            // Verify checksum
+            if (calculateChecksum(payload) != storedChecksum) {
+                throw new RuntimeException("Checksum mismatch; state file corrupted");
+            }
+
+            // Parse validated payload
+            try (DataInputStream validatedDis = new DataInputStream(new ByteArrayInputStream(payload))) {
                 // Verify header
-                int magic = dis.readInt();
+                int magic = validatedDis.readInt();
                 if (magic != MAGIC_HEADER) {
                     throw new RuntimeException("Invalid magic header");
                 }
-                byte version = dis.readByte();
+                byte version = validatedDis.readByte();
                 if (version != VERSION) {
                     throw new RuntimeException("Unsupported version: " + version);
                 }
 
-                // Read state data
-                int storedNodeId = dis.readInt();
-                int term = dis.readInt();
-                boolean hasVotedFor = dis.readBoolean();
-                Integer voted = hasVotedFor ? dis.readInt() : null;
-                int applied = dis.readInt();
-                int storedChecksum = dis.readInt();
+                // Read and apply state data
+                int storedNodeId = validatedDis.readInt();
+                int term = validatedDis.readInt();
+                boolean hasVotedFor = validatedDis.readBoolean();
+                Integer voted = hasVotedFor ? validatedDis.readInt() : null;
+                int applied = validatedDis.readInt();
 
-                // Verify checksum
-                byte[] data = new byte[(int) (stateFile.length() - INT_SIZE)];
-                try (FileInputStream fis = new FileInputStream(stateFile)) {
-                    fis.read(data);
-                }
-                CRC32 crc = new CRC32();
-                crc.update(data, 0, data.length - INT_SIZE); // Exclude checksum
-                if ((int) crc.getValue() != storedChecksum) {
-                    throw new RuntimeException("Checksum mismatch; state file corrupted");
-                }
-
-                // Apply state if valid
                 if (storedNodeId != nodeId) {
                     throw new RuntimeException("Node ID mismatch: expected " + nodeId + ", got " + storedNodeId);
                 }
                 currentTerm = term;
                 votedFor = voted;
                 lastApplied = applied;
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to recover RaftNodeState from disk", e);
             }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to recover RaftNodeState from disk", e);
         }
+    }
+    
+    private int calculateChecksum(byte[] data) {
+        CRC32 crc = new CRC32();
+        crc.update(data);
+        return (int) crc.getValue();
     }
 }
