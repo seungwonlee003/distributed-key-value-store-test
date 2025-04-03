@@ -108,7 +108,7 @@ public class RaftNodeState {
     }
     
     private void recoverFromDisk() {
-        if(!stateFile.exits()) return;
+        if(!stateFile.exists()) return;
         try (DataInputStream dis = new DataInputStream(new FileInputStream(stateFile))) {
             long fileSize = stateFile.length();
             if (fileSize < HEADER_SIZE + INT_SIZE * 3 + 1 + INT_SIZE) {
