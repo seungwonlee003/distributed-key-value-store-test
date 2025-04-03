@@ -25,14 +25,21 @@ public class AppendEntriesHandler {
              log.getTermAt(dto.getPrevLogIndex()) != dto.getPrevLogTerm())) {
             return new AppendEntryResponseDTO(term, false);
         }
-
+        
         int index = dto.getPrevLogIndex() + 1;
         List<LogEntry> entries = dto.getEntries();
         if (!entries.isEmpty()) {
-            if (log.containsEntryAt(index) && log.getTermAt(index) != entries.get(0).getTerm()) {
-                log.deleteFrom(index);
+            for (int i = 0; i < entries.size(); i++) {
+                int logIndex = index + i;
+                if (log.containsEntryAt(logIndex) && log.getTermAt(logIndex) != entries.get(i).getTerm()) {
+                    log.deleteFrom(logIndex);
+                    log.appendAll(entries.subList(i, entries.size()));
+                    break;
+                }
             }
-            log.appendAll(entries);
+            if (!log.containsEntryAt(index)) { // No conflicts found, append all
+                log.appendAll(entries);
+            }
         }
 
         if (dto.getLeaderCommit() > log.getCommitIndex()) {
