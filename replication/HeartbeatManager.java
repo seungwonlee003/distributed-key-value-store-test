@@ -15,7 +15,7 @@ public class HeartbeatManager {
         electionManager.cancelElectionTimerIfRunning();
         heartbeatFuture = heartbeatExecutor.scheduleAtFixedRate(() -> {
             if (raftNodeState.getRole() == Role.LEADER) {
-                raftReplicationManager.startLogReplication();
+                raftReplicationManager.start();
             }
         }, 0, 1000, TimeUnit.MILLISECONDS);
     }
