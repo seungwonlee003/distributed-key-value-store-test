@@ -18,6 +18,6 @@ public class RaftRpcController {
 
     @PostMapping("/readIndex")
     public ResponseEntity<ReadIndexResponseDTO> readIndex() {
-        return ResponseEntity.ok(raftKvService.handleReadIndex());
+        return ResponseEntity.ok(raftKvService.getSafeReadIndex());
     }
 }
