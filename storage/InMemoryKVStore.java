@@ -17,14 +17,11 @@ public class InMemoryKVStore implements KVStore {
 
     @Override
     public void put(String key, String value) {
-        if (key == null) throw new IllegalArgumentException("Key cannot be null");
-        if (value == null) throw new IllegalArgumentException("Value cannot be null");
         store.put(key, value);
     }
 
     @Override
     public void remove(String key) {
-        if (key == null) throw new IllegalArgumentException("Key cannot be null");
         if (!store.containsKey(key)) {
             throw new IllegalStateException("Key '" + key + "' does not exist for removal");
         }
@@ -33,21 +30,11 @@ public class InMemoryKVStore implements KVStore {
 
     @Override
     public String get(String key) {
-        if (key == null) throw new IllegalArgumentException("Key cannot be null");
         return store.get(key);
     }
 
     @Override
     public boolean containsKey(String key) {
-        if (key == null) throw new IllegalArgumentException("Key cannot be null");
         return store.containsKey(key);
-    }
-
-    public Map<String, String> getSnapshot() {
-        return new ConcurrentHashMap<>(store);
-    }
-
-    public void clear() {
-        store.clear();
     }
 }
