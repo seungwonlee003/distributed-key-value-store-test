@@ -27,6 +27,7 @@ public class RaftStateManager {
         state.setCurrentTerm(newTerm);
         state.setCurrentRole(Role.FOLLOWER);
         state.setVotedFor(null);
+        state.setCurrentLeader(null);
         heartbeatManager.stopHeartbeats();
         electionTimer.reset();
     }
