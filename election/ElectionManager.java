@@ -86,6 +86,8 @@ public class ElectionManager {
                         if (response != null && response.isVoteGranted()) {
                             if (voteCount.incrementAndGet() >= majority) {
                                 stateManager.becomeLeader();
+                                // returns when majority of votes recieved
+                                return;
                             }
                         }
                     }
