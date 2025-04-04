@@ -8,6 +8,8 @@ public class RaftKVService {
     private final RaftConfig raftConfig;
     private final RestTemplate restTemplate;
 
+    private final int readLogSyncTimeoutMillis;
+
     public String handleRead(String key) throws IllegalStateException {
         if (raftConfig.isEnableFollowerReads()) {
             if (!raftNodeState.isLeader()) {
@@ -61,6 +63,21 @@ public class RaftKVService {
         while (raftNodeState.getLastApplied() < readIndex) {
             try {
                 Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while syncing log for read", e);
+            }
+        }
+    }
+
+    private void waitForLogToSync(int readIndex) {
+        long startTime = System.currentTimeMillis();
+        while (raftNodeState.getLastApplied() < readIndex) {
+            if (System.currentTimeMillis() - startTime > readLogSyncTimeoutMillis) {
+                throw new IllegalStateException();
+            }
+            try {
+                Thread.sleep(500);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Interrupted while syncing log for read", e);
