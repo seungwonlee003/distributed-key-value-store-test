@@ -8,8 +8,6 @@ public class RaftKVService {
     private final RaftConfig raftConfig;
     private final RestTemplate restTemplate;
 
-    private final int readLogSyncTimeoutMillis;
-
     public String handleRead(String key) throws IllegalStateException {
         if (raftConfig.isEnableFollowerReads()) {
             if (!raftNodeState.isLeader()) {
