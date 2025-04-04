@@ -128,8 +128,6 @@ public class RaftKVService {
     public HeartbeatResponseDTO handleConfirmLeadership(ConfirmLeadershipRequestDTO request) {
         if (request.getTerm() > raftNodeState.getCurrentTerm()) {
             raftNodeState.becomeFollower(request.getTerm());
-            raftNodeState.setCurrentLeader(null); // Reset leader info
-            raftNodeState.setCurrentLeaderUrl(null);
             return new HeartbeatResponseDTO(false, raftNodeState.getCurrentTerm());
         }
         if (raftNodeState.getCurrentRole() != Role.FOLLOWER) {
