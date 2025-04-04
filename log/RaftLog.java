@@ -7,7 +7,6 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.zip.CRC32;
 
 @Component
 public class RaftLog {
@@ -15,9 +14,6 @@ public class RaftLog {
     private int commitIndex = 0;
     private final File logFile = new File("raft_log.bin");
     private static final int INT_SIZE = Integer.BYTES; // 4 bytes
-    private static final int MAGIC_HEADER = 0x52414654; // "RAFT" in ASCII
-    private static final byte VERSION = 1;
-    private static final int HEADER_SIZE = 5; // 4 bytes magic + 1 byte version
 
     public RaftLog() {
         recoverFromDisk();
@@ -93,13 +89,6 @@ public class RaftLog {
         try (RandomAccessFile raf = new RandomAccessFile(logFile, "rw");
              FileChannel channel = raf.getChannel()) {
             long position = channel.size();
-            if (position == 0) {
-                ByteBuffer header = ByteBuffer.allocate(HEADER_SIZE);
-                header.putInt(MAGIC_HEADER);
-                header.put(VERSION);
-                header.flip();
-                channel.write(header);
-            }
             channel.position(position);
             ByteBuffer buffer = serializeEntry(index, entry);
             channel.write(buffer);
@@ -113,13 +102,6 @@ public class RaftLog {
         try (RandomAccessFile raf = new RandomAccessFile(logFile, "rw");
              FileChannel channel = raf.getChannel()) {
             long position = channel.size();
-            if (position == 0) {
-                ByteBuffer header = ByteBuffer.allocate(HEADER_SIZE);
-                header.putInt(MAGIC_HEADER);
-                header.put(VERSION);
-                header.flip();
-                channel.write(header);
-            }
             channel.position(position);
             for (int i = 0; i < entries.size(); i++) {
                 ByteBuffer buffer = serializeEntry(startIndex + i, entries.get(i));
@@ -140,6 +122,7 @@ public class RaftLog {
         byte[] valueBytes = value != null ? value.getBytes(StandardCharsets.UTF_8) : null;
         int valueLen = valueBytes != null ? valueBytes.length : -1;
 
+        // Calculate the size for: index, term, operation, key length, key, value length, and optionally value
         int entrySize = INT_SIZE + INT_SIZE + INT_SIZE + INT_SIZE + keyBytes.length + INT_SIZE;
         if (valueLen >= 0) {
             entrySize += valueLen;
@@ -156,24 +139,13 @@ public class RaftLog {
             entryBuffer.put(valueBytes);
         }
         entryBuffer.flip();
-
-        CRC32 crc = new CRC32();
-        crc.update(entryBuffer.array(), 0, entryBuffer.limit());
-        int checksum = (int) crc.getValue();
-
-        ByteBuffer buffer = ByteBuffer.allocate(entrySize + INT_SIZE);
-        buffer.put(entryBuffer);
-        buffer.putInt(checksum);
-        buffer.flip();
-        return buffer;
+        return entryBuffer;
     }
 
     private void truncateLogFile(int fromIndex) {
         try (RandomAccessFile raf = new RandomAccessFile(logFile, "rw")) {
-            // Start with the header size (magic + version)
-            long offset = HEADER_SIZE;
-
-            // Calculate offset for entries up to fromIndex
+            long offset = 0;
+            // Calculate the offset by iterating through the entries up to the given index
             for (int i = 0; i < fromIndex; i++) {
                 LogEntry entry = logEntries.get(i);
                 String key = entry.getKey();
@@ -182,15 +154,12 @@ public class RaftLog {
                 byte[] valueBytes = value != null ? value.getBytes(StandardCharsets.UTF_8) : null;
                 int valueLen = valueBytes != null ? valueBytes.length : -1;
 
-                // Size: index + term + op + keyLen + key + valueLen + value + checksum
                 int entrySize = INT_SIZE + INT_SIZE + INT_SIZE + INT_SIZE + keyBytes.length + INT_SIZE;
                 if (valueLen >= 0) {
                     entrySize += valueLen;
                 }
-                entrySize += INT_SIZE; // Add checksum size
                 offset += entrySize;
             }
-
             raf.setLength(offset);
             raf.getChannel().force(true);
         } catch (IOException e) {
@@ -205,24 +174,8 @@ public class RaftLog {
         }
     
         try (RandomAccessFile raf = new RandomAccessFile(logFile, "r")) {
-            if (raf.length() < HEADER_SIZE) {
-                // Not enough bytes to even have the header, treat as empty
-                return;
-            }
-            int magic = raf.readInt();
-            if (magic != MAGIC_HEADER) {
-                throw new RuntimeException("Invalid magic header");
-            }
-            byte version = raf.readByte();
-            if (version != VERSION) {
-                throw new RuntimeException("Unsupported log version: " + version);
-            }
-    
             int expectedIndex = 0;
             while (raf.getFilePointer() < raf.length()) {
-                long startPos = raf.getFilePointer();
-    
-                // Read the fields in the same order they were written
                 int index = raf.readInt();
                 if (index != expectedIndex) {
                     throw new RuntimeException("Log index mismatch: expected " + expectedIndex + ", got " + index);
@@ -240,38 +193,9 @@ public class RaftLog {
                     raf.readFully(valueBytes);
                 }
     
-                // Finally, read the checksum (4 bytes)
-                int storedChecksum = raf.readInt();
-    
-                // Figure out how many bytes total this entry (including checksum) occupied
-                long endPos = raf.getFilePointer();
-                int totalSize = (int) (endPos - startPos);
-    
-                // Rewind to startPos to read all but the last 4 checksum bytes for CRC verification
-                raf.seek(startPos);
-                byte[] entryData = new byte[totalSize - 4]; // exclude the checksum
-                raf.readFully(entryData);
-    
-                // Compute our own CRC
-                CRC32 crc = new CRC32();
-                crc.update(entryData);
-                int computedChecksum = (int) crc.getValue();
-    
-                // Compare
-                if (computedChecksum != storedChecksum) {
-                    // Corrupt entry: truncate and stop
-                    raf.seek(startPos);
-                    raf.setLength(startPos);
-                    break;
-                }
-    
-                // If CRC matches, move the pointer back to the end of this entry and add it to memory
-                raf.seek(endPos);
-    
                 String key = new String(keyBytes, StandardCharsets.UTF_8);
                 String value = (valueBytes != null) ? new String(valueBytes, StandardCharsets.UTF_8) : null;
     
-                // Reconstruct the LogEntry using your constructor/enum
                 LogEntry entry = new LogEntry(term, key, value, LogEntry.Operation.values()[opOrdinal]);
                 logEntries.add(entry);
     
