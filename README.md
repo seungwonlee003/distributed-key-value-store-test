@@ -16,4 +16,4 @@ client side de-duplication
 extensions:
 log compaction via snapshots
 
-article: why distributed systems are hard
+article: why distributed systems are hard - lessons learnt from building raft-based distributed key value store
