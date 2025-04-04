@@ -1,5 +1,6 @@
-I wanted to make a fully functional distributed key-value storage with a raft-based consensus algorithm. I first implemented the Raft core and decided to ensure linearizable reads by clients at all costs, and to achieve this, 
-I found it neccessary to implement additional linearizable reads and client-side deduplication mechanism. To make distributed key-value store fully functional, I also made durable disk writes for
+I wanted to make a fully functional and linearizable distributed key-value store. To achieve this, I adopted a raft-based consensus algorithm. 
+I first implemented the Raft core and I found it neccessary to implement additional linearizable reads and client-side deduplication mechanism for the full linearizability. 
+To make distributed key-value store fully functional, I also made durable disk writes for
 persistent states such as the persistent variables like votedFor, and others including log entries, and the state machine. Below are the in-depth details of each component of my distributed key-value store.  
 
 leader election
