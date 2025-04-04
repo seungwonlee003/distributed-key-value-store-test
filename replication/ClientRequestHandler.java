@@ -13,7 +13,6 @@ public class ClientRequestHandler {
         long timeoutMillis = raftConfig.getClientRequestTimeoutMillis(); 
 
         while (raftNodeState.getRole() == Role.LEADER) {
-            // ensures linearizability by default
             if (raftNodeState.getLastApplied() >= entryIndex) {
                 return true;
             }
