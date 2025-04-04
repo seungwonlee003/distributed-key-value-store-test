@@ -3,6 +3,8 @@ I first implemented the Raft core and I found it neccessary to implement additio
 To make distributed key-value store fully functional, I also made durable disk writes for
 persistent states such as votedFor, and others including log entries, and the state machine. Below are the in-depth details of each component of my distributed key-value store.  
 
+Distributed key-value store was made with Java with the help of Spring. Internal RPC calls and client's interaction with the database are simulated with RESTful APIs based on HTTP.
+
 leader election
 
 log replication
