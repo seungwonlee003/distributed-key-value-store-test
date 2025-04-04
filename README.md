@@ -7,3 +7,7 @@ linearizable reads across all nodes
 log entries persistence via bin log
 
 client side de-duplication
+
+things to cover later:
+
+log compaction via snapshots
