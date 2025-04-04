@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class ConfirmLeaderShipRequestDTO {
+public class ConfirmLeadershipRequestDTO {
     private String nodeId;
     private int term;
 }
