@@ -1,21 +1,3 @@
-package com.example.raft.service;
-
-import com.example.raft.config.RaftConfig;
-import com.example.raft.storage.KVStore;
-import com.example.raft.RaftNode;
-import com.example.raft.RaftLogManager;
-import com.example.raft.node.RaftNodeState;
-import com.example.raft.node.Role;
-import com.example.raft.dto.ConfirmLeadershipRequestDTO;
-import com.example.raft.dto.HeartbeatResponseDTO;
-import com.example.raft.dto.ReadIndexResponseDTO;
-import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
 @Service
 @RequiredArgsConstructor
 public class RaftKVService {
