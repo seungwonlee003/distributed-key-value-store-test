@@ -21,7 +21,7 @@ public class RaftRpcController {
         return ResponseEntity.ok(raftKvService.getSafeReadIndex());
     }
 
-    @PostMapping("/raft/confirmLeadership")
+    @PostMapping("/confirmLeadership")
     public ResponseEntity<HeartbeatResponse> confirmLeadership(){
         return ResponseEntity.ok(raftKvService.handleConfirmLeadership());        
     }
