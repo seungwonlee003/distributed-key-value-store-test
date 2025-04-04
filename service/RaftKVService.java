@@ -5,17 +5,20 @@ import com.example.raft.storage.KVStore;
 import com.example.raft.RaftNode;
 import com.example.raft.RaftLogManager;
 import com.example.raft.node.RaftNodeState;
-import com.example.raft.dto.ConfirmLeadershipRequest;
-import com.example.raft.dto.HeartbeatResponse;
+import com.example.raft.node.Role;
+import com.example.raft.dto.ConfirmLeadershipRequestDTO;
+import com.example.raft.dto.HeartbeatResponseDTO;
 import com.example.raft.dto.ReadIndexResponseDTO;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
-public class RaftKVService { 
+public class RaftKVService {
     private final RaftNode raftNode;
     private final RaftNodeState raftNodeState;
     private final RaftLogManager raftLogManager;
@@ -28,13 +31,14 @@ public class RaftKVService {
             if (!raftNodeState.isLeader()) {
                 int readIndex = requestReadIndexFromLeader();
                 waitForLogToSync(readIndex);
-                return kvStore.get(key); 
+                return kvStore.get(key);
             } else {
                 return performLeaderRead(key);
             }
         } else {
             if (!raftNodeState.isLeader()) {
-                throw new IllegalStateException("Read requests must be routed to the leader when follower reads are disabled");
+                String leaderUrl = raftNodeState.getCurrentLeaderUrl();
+                throw new IllegalStateException("Read requests must be routed to the leader at " + leaderUrl + " when follower reads are disabled");
             }
             return performLeaderRead(key);
         }
@@ -45,18 +49,17 @@ public class RaftKVService {
         if (leaderUrl == null) {
             throw new IllegalStateException("Leader unknown. Cannot perform follower read.");
         }
-    
+
         try {
             ResponseEntity<ReadIndexResponseDTO> response = restTemplate.getForEntity(
                 leaderUrl + "/raft/rpc/readIndex",
                 ReadIndexResponseDTO.class
             );
-    
-            ReadIndexResponseDTO body = response.getBody();
-            if (response.getStatusCode().is2xxSuccessful() && body != null) {
-                return body.getReadIndex();
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return response.getBody().getReadIndex();
             } else {
-                throw new IllegalStateException("Failed to obtain read index from leader.");
+                throw new IllegalStateException("Failed to obtain read index from leader. Status: " + response.getStatusCode());
             }
         } catch (Exception e) {
             throw new IllegalStateException("Error while contacting leader for read index", e);
@@ -71,7 +74,7 @@ public class RaftKVService {
         int readIndex = raftLogManager.getCommitIndex();
         return new ReadIndexResponseDTO(readIndex);
     }
-    
+
     private void waitForLogToSync(int readIndex) {
         while (raftNodeState.getLastApplied() < readIndex) {
             try {
@@ -82,7 +85,7 @@ public class RaftKVService {
             }
         }
     }
-    
+
     private String performLeaderRead(String key) {
         confirmLeadership();
         int readIndex = raftLogManager.getCommitIndex();
@@ -94,46 +97,49 @@ public class RaftKVService {
         if (!raftNodeState.isLeader()) {
             throw new IllegalStateException("Not leader.");
         }
-        
+
         int currentTerm = raftNodeState.getCurrentTerm();
-        int confirmations = 1; // count self
+        int confirmations = 1;
 
         for (String peerUrl : raftConfig.getPeerUrlList()) {
             try {
-                HeartbeatResponse response = restTemplate.postForObject(
-                    peerUrl + "/raft/confirmLeadership", 
-                    new ConfirmLeadershipRequest(raftNodeState.getNodeId(), currentTerm),
-                    HeartbeatResponse.class
+                HeartbeatResponseDTO response = restTemplate.postForObject(
+                    peerUrl + "/raft/confirmLeadership",
+                    new ConfirmLeadershipRequestDTO(raftNodeState.getNodeId(), currentTerm),
+                    HeartbeatResponseDTO.class
                 );
                 if (response != null && response.isSuccess() && response.getTerm() == currentTerm) {
                     confirmations++;
-                } else if(response.getTerm() > currentTerm){
-                    stateManager.becomeFollower(response.getTerm());
-                    throw new IllegalStateException("Split brain scenario");
-                } 
-            } catch (Exception ignored) {
-                // Ignore unreachable peers.
+                } else if (response != null && response.getTerm() > currentTerm) {
+                    raftNodeState.becomeFollower(response.getTerm());
+                    throw new IllegalStateException("Higher term detected, stepping down");
+                }
+            } catch (Exception e) {
             }
         }
-        int majority = (raftConfig.getPeerUrlMap().size()) / 2 + 1;
+
+        int totalNodes = raftConfig.getPeerUrlList().size() + 1;
+        int majority = totalNodes / 2 + 1;
         if (confirmations < majority) {
             throw new IllegalStateException("Leadership not confirmed: quorum not achieved");
         }
     }
 
-    public HeartbeatResponse handleConfirmLeadership(ConfirmLeadershipRequest request) {
+    public HeartbeatResponseDTO handleConfirmLeadership(ConfirmLeadershipRequestDTO request) {
         if (request.getTerm() > raftNodeState.getCurrentTerm()) {
-            stateManager.becomeFollower(request.getTerm());
-            return new HeartbeatResponse(false, request.getTerm());
+            raftNodeState.becomeFollower(request.getTerm());
+            raftNodeState.setCurrentLeader(null); // Reset leader info
+            raftNodeState.setCurrentLeaderUrl(null);
+            return new HeartbeatResponseDTO(false, raftNodeState.getCurrentTerm());
         }
         if (raftNodeState.getCurrentRole() != Role.FOLLOWER) {
-            return new HeartbeatResponse(false, raftNodeState.getCurrentTerm());
+            return new HeartbeatResponseDTO(false, raftNodeState.getCurrentTerm());
         }
         boolean success = request.getTerm() == raftNodeState.getCurrentTerm();
         if (raftNodeState.getCurrentLeader() != null &&
             !raftNodeState.getCurrentLeader().equals(request.getNodeId())) {
             success = false;
         }
-        return new HeartbeatResponse(success, raftNodeState.getCurrentTerm());
+        return new HeartbeatResponseDTO(success, raftNodeState.getCurrentTerm());
     }
 }
