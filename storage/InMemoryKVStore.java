@@ -4,11 +4,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 @Component
+@Getter
+@Setter
 public class InMemoryKVStore implements KVStore {
     private final Map<String, String> store;
+    private final Map<String, Integer> clientStore;
 
     public InMemoryKVStore() {
         this.store = new ConcurrentHashMap<>();
+        this.clientStore = new ConcurrentHashMap<>();
     }
 
     @Override
