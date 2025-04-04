@@ -1,21 +1,16 @@
-I wanted to make a fully functional and linearizable distributed key-value store. To achieve this, I adopted a Raft consensus algorithm. 
-I first implemented the Raft core and I found it neccessary to implement additional linearizable reads and client-side deduplication mechanism to ensure the full linearizability. 
-To make distributed key-value store fully functional, I also made durable disk writes for
-persistent states such as votedFor, and others including log entries, and the state machine. Below are the in-depth details of each component of my distributed key-value store.  
+I aimed to build a fully functional, linearizable distributed key-value store using the Raft consensus algorithm. To achieve this, I first implemented Raft’s core functionality and then added linearizable reads and a client-side deduplication mechanism to ensure full linearizability. For durability, I incorporated persistent disk writes for states like votedFor, log entries, and the state machine. Below are the detailed components of my distributed key-value store.
 
-Distributed key-value store was made with Java with the help of Spring. Persistent states and logs are persisted on disk with using append-only, file-backed logs and the state machine is persisted with embedded H2 database. Internal RPC calls and client's interaction with the database are simulated with RESTful APIs based on HTTP.
+The store is built in Java using Spring. Persistent states and logs are stored on disk with append-only, file-backed logs, while the state machine is persisted using an embedded H2 database. Internal RPCs and client interactions are handled via RESTful HTTP APIs.
 
-leader election
+Leader Election
 
-log replication
+Log Replication
 
-linearizable reads across all nodes 
+Linearizable Reads Across All Nodes
 
-log entries persistence via bin log
+Log Entry Persistence via Binary Log
 
-client side de-duplication
+Client-Side Deduplication
 
-extensions:
-log compaction via snapshots
-
-article: why distributed systems are hard - lessons learnt from building raft-based distributed key value store
+Extensions: Log Compaction via Snapshots
+Article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store"
