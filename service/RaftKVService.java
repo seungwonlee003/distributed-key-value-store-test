@@ -70,21 +70,6 @@ public class RaftKVService {
         }
     }
 
-    private void waitForLogToSync(int readIndex) {
-        long startTime = System.currentTimeMillis();
-        while (raftNodeState.getLastApplied() < readIndex) {
-            if (System.currentTimeMillis() - startTime > readLogSyncTimeoutMillis) {
-                throw new IllegalStateException();
-            }
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted while syncing log for read", e);
-            }
-        }
-    }
-
     private String performLeaderRead(String key) {
         confirmLeadership();
         int readIndex = raftLogManager.getCommitIndex();
