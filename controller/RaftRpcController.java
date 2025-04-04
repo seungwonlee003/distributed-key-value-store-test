@@ -20,4 +20,9 @@ public class RaftRpcController {
     public ResponseEntity<ReadIndexResponseDTO> readIndex() {
         return ResponseEntity.ok(raftKvService.getSafeReadIndex());
     }
+
+    @PostMapping("/raft/confirmLeadership")
+    public ResponseEntity<HeartbeatResponse> confirmLeadership(){
+        return ResponseEntity.ok(raftKvService.handleConfirmLeadership());        
+    }
 }
