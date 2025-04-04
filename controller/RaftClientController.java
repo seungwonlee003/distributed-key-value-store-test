@@ -4,11 +4,11 @@
 public class RaftClientController {
     private final RaftNode raftNode;
     private final RaftLogManager logManager;
-    private final RaftKVService raftKVService;
+    private final ReadOperationHandler readOperationHandler;
     
     @GetMapping("/get")
     public ResponseEntity<String> read(@RequestParam String key){
-        String val = raftKVService.handleRead(key);
+        String val = readOperationHandler.handleRead(key);
         return ResponseEntity.ok(val);
     }
 
