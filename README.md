@@ -8,6 +8,5 @@ log entries persistence via bin log
 
 client side de-duplication
 
-things to cover later:
-
+extensions:
 log compaction via snapshots
