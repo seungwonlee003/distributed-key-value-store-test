@@ -6,6 +6,7 @@ public class LeadershipManager {
     private final RaftConfig raftConfig;
     private final RestTemplate restTemplate;
 
+    // wait for majority of votes
     public void confirmLeadership() {
         if (!raftNodeState.isLeader()) {
             throw new IllegalStateException("Not leader.");
@@ -26,21 +27,19 @@ public class LeadershipManager {
     
         int totalNodes = raftConfig.getPeerUrlList().size() + 1;
         int majority = totalNodes / 2 + 1;
-        AtomicInteger confirmationCount = new AtomicInteger(1); // Self-confirmation
-        CountDownLatch latch = new CountDownLatch(confirmationFutures.size());
+        int requiredPeerConfirmations = majority - 1; // Subtract self-confirmation
+        CountDownLatch latch = new CountDownLatch(requiredPeerConfirmations);
     
         for (CompletableFuture<HeartbeatResponseDTO> future : confirmationFutures) {
             future.thenAccept(response -> {
                 synchronized (this) {
                     if (!raftNodeState.isLeader() || raftNodeState.getCurrentTerm() != currentTerm) {
-                        latch.countDown();
-                        return;
+                        return; // Don’t count down; let timeout handle it
                     }
                     if (response != null && response.isSuccess() && response.getTerm() == currentTerm) {
-                        confirmationCount.incrementAndGet();
+                        latch.countDown(); // Only count down on success
                     }
                 }
-                latch.countDown();
             });
         }
     
@@ -51,11 +50,10 @@ public class LeadershipManager {
             throw new IllegalStateException("Interrupted while confirming leadership.");
         }
     
-        if (confirmationCount.get() < majority) {
+        if (latch.getCount() > 0) { // If latch didn’t reach 0, not enough confirmations
             throw new IllegalStateException("Leadership confirmation failed.");
         }
     }
-
     private HeartbeatResponseDTO requestLeadershipConfirmation(int leaderId, int term, String peerUrl) {
         try {
             String url = peerUrl + "/raft/confirmLeadership";
