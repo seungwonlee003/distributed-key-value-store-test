@@ -16,12 +16,15 @@ public class RaftStateMachine implements StateMachine {
         if (entry == null) {
             throw new IllegalArgumentException("Log entry cannot be null");
         }
+        
+        // deduplication check
         String clientId = entry.getClientId();
         long sequenceNumber = entry.getSequenceNumber();
         Long lastSequenceNumber = kvStore.getLastSequenceNumber(clientId);
         if (lastSequenceNumber != null && sequenceNumber <= lastSequenceNumber) {
             return;
         }
+        
         switch (entry.getOperation()) {
             case INSERT:
                 if (kvStore.containsKey(entry.getKey())) {
