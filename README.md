@@ -17,3 +17,6 @@ Client-Side Deduplication
 Extensions: Log Compaction via Snapshots, membership changes, transactions where multiple keys can be changed simultaneously.
 
 Article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store"
+
+Usage:
+To start a three-node cluster:
