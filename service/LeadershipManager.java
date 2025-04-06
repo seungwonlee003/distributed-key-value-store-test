@@ -13,7 +13,7 @@ public class LeadershipManager {
         int currentTerm = raftNodeState.getCurrentTerm();
         List<CompletableFuture<HeartbeatResponseDTO>> confirmationFutures = new ArrayList<>();
         ExecutorService executor = Executors.newCachedThreadPool();
-
+    
         for (String peerUrl : raftConfig.getPeerUrlList()) {
             confirmationFutures.add(
                 CompletableFuture.supplyAsync(() -> requestLeadershipConfirmation(
@@ -23,23 +23,34 @@ public class LeadershipManager {
                 .exceptionally(throwable -> new HeartbeatResponseDTO(currentTerm, false))
             );
         }
-
+    
         int totalNodes = raftConfig.getPeerUrlList().size() + 1;
         int majority = totalNodes / 2 + 1;
         AtomicInteger confirmationCount = new AtomicInteger(1); // Self-confirmation
-
+        CountDownLatch latch = new CountDownLatch(confirmationFutures.size());
+    
         for (CompletableFuture<HeartbeatResponseDTO> future : confirmationFutures) {
             future.thenAccept(response -> {
                 synchronized (this) {
                     if (!raftNodeState.isLeader() || raftNodeState.getCurrentTerm() != currentTerm) {
+                        latch.countDown();
                         return;
                     }
                     if (response != null && response.isSuccess() && response.getTerm() == currentTerm) {
                         confirmationCount.incrementAndGet();
                     }
                 }
+                latch.countDown();
             });
         }
+    
+        try {
+            latch.await(raftConfig.getElectionRpcTimeoutMillis() * 2, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while confirming leadership.");
+        }
+    
         if (confirmationCount.get() < majority) {
             throw new IllegalStateException("Leadership confirmation failed.");
         }
