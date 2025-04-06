@@ -49,8 +49,4 @@ public class InMemoryKVStore implements KVStore {
     public void setLastRequestId(String clientId, Long requestId) {
         clientStore.put(clientId, requestId);
     }
-
-    public Map<String, Long> getClientStore() {
-        return clientStore;
-    }
 }
