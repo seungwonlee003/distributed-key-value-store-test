@@ -16,16 +16,12 @@ public class RaftStateMachine implements StateMachine {
         if (entry == null) {
             throw new IllegalArgumentException("Log entry cannot be null");
         }
-
-        // Client-side de-duplication logic
         String clientId = entry.getClientId();
         long sequenceNumber = entry.getSequenceNumber();
         Long lastRequestId = kvStore.getLastRequestId(clientId);
         if (lastRequestId != null && sequenceNumber <= lastRequestId) {
-            return; // Skip duplicate request
+            return;
         }
-
-        // Apply state machine operations
         switch (entry.getOperation()) {
             case INSERT:
                 if (kvStore.containsKey(entry.getKey())) {
@@ -33,23 +29,18 @@ public class RaftStateMachine implements StateMachine {
                 }
                 kvStore.put(entry.getKey(), entry.getValue());
                 break;
-
             case UPDATE:
                 if (!kvStore.containsKey(entry.getKey())) {
                     throw new IllegalStateException("Key '" + entry.getKey() + "' does not exist for UPDATE");
                 }
                 kvStore.put(entry.getKey(), entry.getValue());
                 break;
-
             case DELETE:
                 kvStore.remove(entry.getKey());
                 break;
-
             default:
                 throw new IllegalStateException("Unknown operation: " + entry.getOperation());
         }
-
-        // Update client sequence number
         kvStore.setLastRequestId(clientId, sequenceNumber);
     }
 }
