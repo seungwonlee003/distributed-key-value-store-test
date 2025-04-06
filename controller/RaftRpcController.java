@@ -15,12 +15,7 @@ public class RaftRpcController {
     public ResponseEntity<AppendEntryResponseDTO> appendEntries(@RequestBody AppendEntryDTO dto) {
         return ResponseEntity.ok(raftLogManager.handleAppendEntries(dto));
     }
-
-    @PostMapping("/readIndex")
-    public ResponseEntity<ReadIndexResponseDTO> readIndex() {
-        return ResponseEntity.ok(raftKvService.getSafeReadIndex());
-    }
-
+    
     @PostMapping("/confirmLeadership")
     public ResponseEntity<HeartbeatResponse> confirmLeadership(){
         return ResponseEntity.ok(raftKvService.handleConfirmLeadership());        
