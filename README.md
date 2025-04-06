@@ -6,6 +6,8 @@ Leader Election
 
 Log Replication
 
+Safety
+
 Linearizable Reads Across All Nodes
 
 Log Entry Persistence via Binary Log
