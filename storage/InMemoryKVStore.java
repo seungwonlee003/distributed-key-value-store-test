@@ -1,14 +1,16 @@
 package com.example.raft.storage;
 
+import org.springframework.stereotype.Component;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
+/**
+ * An in-memory implementation of the KVStore interface using ConcurrentHashMap for thread-safe operations.
+ */
 @Component
-@Getter
-@Setter
 public class InMemoryKVStore implements KVStore {
     private final Map<String, String> store;
-    private final Map<String, Integer> clientStore;
+    private final Map<String, Long> clientStore;
 
     public InMemoryKVStore() {
         this.store = new ConcurrentHashMap<>();
@@ -36,5 +38,19 @@ public class InMemoryKVStore implements KVStore {
     @Override
     public boolean containsKey(String key) {
         return store.containsKey(key);
+    }
+
+    @Override
+    public Long getLastRequestId(String clientId) {
+        return clientStore.get(clientId);
+    }
+
+    @Override
+    public void setLastRequestId(String clientId, Long requestId) {
+        clientStore.put(clientId, requestId);
+    }
+
+    public Map<String, Long> getClientStore() {
+        return clientStore;
     }
 }
