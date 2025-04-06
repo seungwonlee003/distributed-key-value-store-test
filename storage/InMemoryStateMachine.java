@@ -1,6 +1,7 @@
 package com.example.raft.storage;
 
 import com.example.raft.log.LogEntry;
+import org.springframework.stereotype.Component;
 
 @Component
 public class InMemoryStateMachine implements StateMachine {
@@ -16,13 +17,11 @@ public class InMemoryStateMachine implements StateMachine {
             throw new IllegalArgumentException("Log entry cannot be null");
         }
 
-        // deduplication logic
         String clientId = entry.getClientId();
         long sequenceNumber = entry.getSequenceNumber();
-
-        Map<String, Long> clientStore = kvStore.getClientStore();
-        Long lastRequestId = clientStore.get(clientId);
-        if (lastRequestId != null && requestId <= lastRequestId) {
+        Long lastRequestId = kvStore.getLastRequestId(clientId);
+        
+        if (lastRequestId != null && sequenceNumber <= lastRequestId) {
             return;
         }
 
@@ -49,6 +48,6 @@ public class InMemoryStateMachine implements StateMachine {
                 throw new IllegalStateException("Unknown operation: " + entry.getOperation());
         }
 
-        clientStore.put(clientId, requestId);
+        kvStore.setLastRequestId(clientId, sequenceNumber);
     }
 }
