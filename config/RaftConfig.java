@@ -20,8 +20,8 @@ public class RaftConfig {
 
     private Map<Integer, String> peerUrls;
 
-    private long electionTimeoutMillisMin;      // 3000
-    private long electionTimeoutMillisMax;      // 5000
+    private long electionTimeoutMillisMin;      // 4000
+    private long electionTimeoutMillisMax;      // 6000
     private long heartbeatIntervalMillis;       // 500
 
     private long electionRpcTimeoutMillis;      // 2000
