@@ -14,5 +14,5 @@ Log Entry Persistence via Binary Log
 
 Client-Side Deduplication
 
-Extensions: Log Compaction via Snapshots
+Extensions: Log Compaction via Snapshots, cluster membership changes, transaction where multiple keys can be changed simultaneously.
 Article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store"
