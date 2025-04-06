@@ -41,12 +41,12 @@ public class InMemoryKVStore implements KVStore {
     }
 
     @Override
-    public Long getLastRequestId(String clientId) {
+    public Long getLastSequenceNumber(String clientId) {
         return clientStore.get(clientId);
     }
 
     @Override
-    public void setLastRequestId(String clientId, Long requestId) {
-        clientStore.put(clientId, requestId);
+    public void setLastSequenceNumber(String clientId, Long sequenceNumber) {
+        clientStore.put(clientId, sequenceNumber);
     }
 }
