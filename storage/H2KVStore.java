@@ -15,7 +15,7 @@ public class H2KVStore implements KVStore {
     private void createTables() throws SQLException {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS kv_store (key VARCHAR(255) PRIMARY KEY, value VARCHAR(255))");
-            stmt.execute("CREATE TABLE IF NOT EXISTS client_store (client_id VARCHAR(255) PRIMARY KEY, last_request_id BIGINT)");
+            stmt.execute("CREATE TABLE IF NOT EXISTS client_store (client_id VARCHAR(255) PRIMARY KEY, last_sequence_number BIGINT)");
         }
     }
 
@@ -72,27 +72,27 @@ public class H2KVStore implements KVStore {
     }
 
     @Override
-    public Long getLastRequestId(String clientId) {
+    public Long getLastSequenceNumber(String clientId) {
         try (PreparedStatement pstmt = connection.prepareStatement(
-                "SELECT last_request_id FROM client_store WHERE client_id = ?")) {
+                "SELECT last_sequence_number FROM client_store WHERE client_id = ?")) {
             pstmt.setString(1, clientId);
             try (ResultSet rs = pstmt.executeQuery()) {
-                return rs.next() ? rs.getLong("last_request_id") : null;
+                return rs.next() ? rs.getLong("last_sequence_number") : null;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to get last request ID", e);
+            throw new RuntimeException("Failed to get last sequence number", e);
         }
     }
 
     @Override
-    public void setLastRequestId(String clientId, Long requestId) {
+    public void setLastSequenceNumber(String clientId, Long sequenceNumber) {
         try (PreparedStatement pstmt = connection.prepareStatement(
-                "MERGE INTO client_store (client_id, last_request_id) VALUES (?, ?)")) {
+                "MERGE INTO client_store (client_id, last_sequence_number) VALUES (?, ?)")) {
             pstmt.setString(1, clientId);
-            pstmt.setLong(2, requestId);
+            pstmt.setLong(2, sequenceNumber);
             pstmt.executeUpdate();
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to set last request ID", e);
+            throw new RuntimeException("Failed to set last sequence number", e);
         }
     }
 }
