@@ -73,13 +73,4 @@ public class LeadershipManager {
                           raftNodeState.getCurrentLeader().equals(request.getNodeId()));
         return new HeartbeatResponseDTO(success, raftNodeState.getCurrentTerm());
     }
-
-    public ReadIndexResponseDTO getSafeReadIndex() {
-        if (!raftNodeState.isLeader()) {
-            throw new IllegalStateException("Not leader. Cannot serve read index request.");
-        }
-        confirmLeadership();
-        int readIndex = raftLogManager.getCommitIndex();
-        return new ReadIndexResponseDTO(readIndex);
-    }
 }
