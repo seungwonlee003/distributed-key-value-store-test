@@ -8,7 +8,7 @@ Log Replication
 
 Safety
 
-Linearizable Reads Across All Nodes
+Linearizable Reads
 
 Log Entry Persistence via Binary Log
 
