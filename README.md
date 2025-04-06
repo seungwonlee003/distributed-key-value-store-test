@@ -2,19 +2,7 @@ I aimed to build a fully functional, linearizable distributed key-value store us
 
 The store is built in Java using Spring. Persistent states and logs are stored on disk with append-only, file-backed logs, while the state machine is persisted using an embedded H2 database. Internal RPCs and client interactions are handled via RESTful HTTP APIs.
 
-Leader Election
-
-Log Replication
-
-Safety
-
-Linearizable Reads
-
-Log Entry Persistence via Binary Log
-
-Client-Side Deduplication
-
-Extensions: Log Compaction via Snapshots, membership changes, transactions where multiple keys can be changed simultaneously.
+refer to github wiki page for more details on implementation details, trobleshooting, and future extensions. 
 
 Article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store"
 
