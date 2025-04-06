@@ -34,15 +34,15 @@ public class LeadershipManager {
             future.thenAccept(response -> {
                 synchronized (this) {
                     if (!raftNodeState.isLeader() || raftNodeState.getCurrentTerm() != currentTerm) {
-                        return; // Don’t count down; let timeout handle it
+                        return;
                     }
                     if (response != null && response.isSuccess() && response.getTerm() == currentTerm) {
-                        latch.countDown(); // Only count down on success
+                        latch.countDown();
                     }
                 }
             });
         }
-    
+
         try {
             latch.await(raftConfig.getElectionRpcTimeoutMillis() * 2, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -50,7 +50,7 @@ public class LeadershipManager {
             throw new IllegalStateException("Interrupted while confirming leadership.");
         }
     
-        if (latch.getCount() > 0) { // If latch didn’t reach 0, not enough confirmations
+        if (latch.getCount() > 0) {
             throw new IllegalStateException("Leadership confirmation failed.");
         }
     }
