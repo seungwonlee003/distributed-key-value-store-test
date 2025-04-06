@@ -76,7 +76,7 @@ public class ElectionManager {
             }
     
             int majority = (config.getPeerUrlList().size() + 1) / 2 + 1;
-            AtomicInteger voteCount = new AtomicInteger(1); // Self-vote
+            AtomicInteger voteCount = new AtomicInteger(1);
     
             for (CompletableFuture<VoteResponseDTO> future : voteFutures) {
                 future.thenAccept(response -> {
