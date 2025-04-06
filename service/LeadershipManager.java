@@ -54,6 +54,7 @@ public class LeadershipManager {
             throw new IllegalStateException("Leadership confirmation failed.");
         }
     }
+    
     private HeartbeatResponseDTO requestLeadershipConfirmation(int leaderId, int term, String peerUrl) {
         try {
             String url = peerUrl + "/raft/confirmLeadership";
