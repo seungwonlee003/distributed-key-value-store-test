@@ -19,4 +19,7 @@ Extensions: Log Compaction via Snapshots, membership changes, transactions where
 Article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store"
 
 Usage:
-To start a three-node cluster:
+discuss how to use this database:
+1. edit application.properties file to set up clusters and their addresses
+2. 3 endpoints visible: /get, /insert, /update, /delete.
+3. include client UUID and sequence number, etc
