@@ -22,11 +22,10 @@ public class RaftConfig {
 
     private long electionTimeoutMillisMin;      // 4000
     private long electionTimeoutMillisMax;      // 6000
-    private long heartbeatIntervalMillis;       // 500
+    private long heartbeatIntervalMillis;       // 1000
 
     private long electionRpcTimeoutMillis;      // 2000
     private long clientRequestTimeoutMillis;    // 2000
-    private long replicationBackoffMaxMillis;   // 3000
 
     private boolean enableFollowerReads;
    
