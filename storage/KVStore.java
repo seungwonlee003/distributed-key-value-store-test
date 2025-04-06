@@ -5,6 +5,6 @@ public interface KVStore {
     void remove(String key);
     String get(String key);
     boolean containsKey(String key);
-    Long getLastRequestId(String clientId);
-    void setLastRequestId(String clientId, Long requestId);
+    Long getLastSequenceNumber(String clientId);
+    void setLastSequenceNumber(String clientId, Long sequenceNumber);
 }
