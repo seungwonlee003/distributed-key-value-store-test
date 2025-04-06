@@ -18,7 +18,7 @@ public class RaftStateMachine implements StateMachine {
         }
         String clientId = entry.getClientId();
         long sequenceNumber = entry.getSequenceNumber();
-        Long lastSequenceNumber = kvStore.lastSequenceNumber(clientId);
+        Long lastSequenceNumber = kvStore.getLastSequenceNumber(clientId);
         if (lastSequenceNumber != null && sequenceNumber <= lastSequenceNumber) {
             return;
         }
