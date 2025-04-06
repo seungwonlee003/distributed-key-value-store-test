@@ -1,19 +1,13 @@
-package com.example.raft.storage;
-
-import org.springframework.stereotype.Component;
-import java.sql.*;
-
 @Component
+@RequiredArgsConstructor
 public class H2KVStore implements KVStore {
-    private final Connection connection;
 
-    public H2KVStore() throws SQLException {
-        this.connection = DriverManager.getConnection("jdbc:h2:./data/kvstore", "sa", "");
-        createTables();
-    }
+    private final DataSource dataSource;
 
-    private void createTables() throws SQLException {
-        try (Statement stmt = connection.createStatement()) {
+    @PostConstruct
+    public void init() throws SQLException {
+        try (Connection connection = dataSource.getConnection();
+             Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS kv_store (key VARCHAR(255) PRIMARY KEY, value VARCHAR(255))");
             stmt.execute("CREATE TABLE IF NOT EXISTS client_store (client_id VARCHAR(255) PRIMARY KEY, last_sequence_number BIGINT)");
         }
@@ -21,8 +15,9 @@ public class H2KVStore implements KVStore {
 
     @Override
     public void put(String key, String value) {
-        try (PreparedStatement pstmt = connection.prepareStatement(
-                "MERGE INTO kv_store (key, value) VALUES (?, ?)")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                     "MERGE INTO kv_store (key, value) VALUES (?, ?)")) {
             pstmt.setString(1, key);
             pstmt.setString(2, value);
             pstmt.executeUpdate();
@@ -33,8 +28,9 @@ public class H2KVStore implements KVStore {
 
     @Override
     public void remove(String key) {
-        try (PreparedStatement pstmt = connection.prepareStatement(
-                "DELETE FROM kv_store WHERE key = ?")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                     "DELETE FROM kv_store WHERE key = ?")) {
             pstmt.setString(1, key);
             int rows = pstmt.executeUpdate();
             if (rows == 0) {
@@ -47,8 +43,9 @@ public class H2KVStore implements KVStore {
 
     @Override
     public String get(String key) {
-        try (PreparedStatement pstmt = connection.prepareStatement(
-                "SELECT value FROM kv_store WHERE key = ?")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                     "SELECT value FROM kv_store WHERE key = ?")) {
             pstmt.setString(1, key);
             try (ResultSet rs = pstmt.executeQuery()) {
                 return rs.next() ? rs.getString("value") : null;
@@ -60,8 +57,9 @@ public class H2KVStore implements KVStore {
 
     @Override
     public boolean containsKey(String key) {
-        try (PreparedStatement pstmt = connection.prepareStatement(
-                "SELECT COUNT(*) FROM kv_store WHERE key = ?")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                     "SELECT COUNT(*) FROM kv_store WHERE key = ?")) {
             pstmt.setString(1, key);
             try (ResultSet rs = pstmt.executeQuery()) {
                 return rs.next() && rs.getInt(1) > 0;
@@ -73,8 +71,9 @@ public class H2KVStore implements KVStore {
 
     @Override
     public Long getLastSequenceNumber(String clientId) {
-        try (PreparedStatement pstmt = connection.prepareStatement(
-                "SELECT last_sequence_number FROM client_store WHERE client_id = ?")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                     "SELECT last_sequence_number FROM client_store WHERE client_id = ?")) {
             pstmt.setString(1, clientId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 return rs.next() ? rs.getLong("last_sequence_number") : null;
@@ -86,8 +85,9 @@ public class H2KVStore implements KVStore {
 
     @Override
     public void setLastSequenceNumber(String clientId, Long sequenceNumber) {
-        try (PreparedStatement pstmt = connection.prepareStatement(
-                "MERGE INTO client_store (client_id, last_sequence_number) VALUES (?, ?)")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                     "MERGE INTO client_store (client_id, last_sequence_number) VALUES (?, ?)")) {
             pstmt.setString(1, clientId);
             pstmt.setLong(2, sequenceNumber);
             pstmt.executeUpdate();
