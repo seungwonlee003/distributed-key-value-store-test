@@ -18,8 +18,8 @@ public class RaftStateMachine implements StateMachine {
         }
         String clientId = entry.getClientId();
         long sequenceNumber = entry.getSequenceNumber();
-        Long lastRequestId = kvStore.getLastRequestId(clientId);
-        if (lastRequestId != null && sequenceNumber <= lastRequestId) {
+        Long lastSequenceNumber = kvStore.lastSequenceNumber(clientId);
+        if (lastSequenceNumber != null && sequenceNumber <= lastSequenceNumber) {
             return;
         }
         switch (entry.getOperation()) {
@@ -41,6 +41,6 @@ public class RaftStateMachine implements StateMachine {
             default:
                 throw new IllegalStateException("Unknown operation: " + entry.getOperation());
         }
-        kvStore.setLastRequestId(clientId, sequenceNumber);
+        kvStore.setLastSequenceNumber(clientId, sequenceNumber);
     }
 }
