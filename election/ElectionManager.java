@@ -48,7 +48,7 @@ public class ElectionManager {
         return new VoteResponseDTO(currentTerm, true);
     }
 
-    //  election timer duration must be strictly greater than election rpc timeout or else concurrency problems may arise
+    //  election timer duration must be strictly greater than election rpc timeout or else two startElection call can happen concurrently
     public void startElection() {
         synchronized (this) {
             if (nodeState.getRole() == Role.LEADER) return;
