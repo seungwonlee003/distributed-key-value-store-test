@@ -4,15 +4,13 @@ package com.example.raft.log;
 @Setter
 @RequiredArgsConstructor
 public class LogEntry {
-    private final int term;          // Raft term for this entry
-    private final String key;        // Key for the operation
-    private final String value;      // Value for INSERT/UPDATE (null for DELETE)
-    private final Operation operation; // Enum for operation type
+    private final int term;
+    private final String key;
+    private final String value;
+    private final Operation operation;
 
-    // unique client id
-    private final String clientUUID;
-    // monotonomically increasing per request (unless same request)
-    private final int sequenceNumber;
+    private final String clientId;
+    private final long sequenceNumber;
 
     public enum Operation {
         INSERT,
