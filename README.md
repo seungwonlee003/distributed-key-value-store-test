@@ -1,12 +1,10 @@
-Intro
-
-I aimed to build a fully functional, linearizable distributed key-value store using the Raft consensus algorithm. To achieve this, I first implemented Raft’s core functionality and then added a client-side deduplication mechanism to make it a fully linearizable storage. I have both in-memory and disk storage implementations for the Raft log, state, and state machine to allow efficient end-to-end testing. Below are the detailed components of my distributed key-value store.
+This is a fully functional, linearizable distributed key-value store using the Raft consensus algorithm.
 
 The store is built in Java using Spring. Persistent states and logs are stored on disk with append-only, file-backed logs, while the state machine is persisted using an embedded H2 database. Internal RPCs and client interactions are handled via RESTful HTTP APIs.
 
-refer to github wiki page for more details on implementation details, trobleshooting, and future extensions. 
+refer to github wiki page for more details on the project: https://github.com/seungwonlee003/distributed-key-value-store/wiki.
 
-Article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store"
+refer to the article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store"
 
 
 Usage:
