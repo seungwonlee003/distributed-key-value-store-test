@@ -6,8 +6,8 @@ The store is built in Java using Spring. Persistent states and logs are stored o
 Refer to the GitHub Wiki for more details on the project.
 
 Refer to the article: "Why Distributed Systems Are Hard: Lessons Learned from Building a Raft-Based Distributed Key-Value Store."
-## Usage:
 
+## Usage:
 discuss how to use this database:
 1. edit application.properties file to set up clusters and their addresses
 2. 3 endpoints visible: /get, /insert, /update, /delete.
