@@ -3,9 +3,7 @@ This is a minimal distributed key-value store implemented using the Raft consens
 
 The store is built in Java using Spring. Persistent states and logs are stored on disk using append-only, file-backed logs, while the state machine is persisted with an embedded H2 database. Internal RPCs and client interactions are handled via RESTful HTTP APIs.
 
-Refer to the GitHub Wiki for more details on the project.
-
-This article walks through the code: "Implementing the Raft-Based Key-Value Database in Java with Spring"
+Refer to the two articles for more details on the project.
 
 ## Usage:
 discuss how to use this database:
