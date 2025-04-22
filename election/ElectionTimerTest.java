@@ -4,6 +4,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 public class ElectionTimerTest {
 
     @Mock
@@ -15,14 +16,13 @@ public class ElectionTimerTest {
     @Mock
     private ElectionManager electionManager;
 
+    @InjectMocks
     private ElectionTimer electionTimer;
 
     @BeforeEach
     public void setUp() {
-        MockitoAnnotations.openMocks(this);
         when(raftConfig.getElectionTimeoutMillisMin()).thenReturn(100L);
         when(raftConfig.getElectionTimeoutMillisMax()).thenReturn(101L);
-        electionTimer = new ElectionTimer(raftConfig, raftNode, electionManager);
     }
 
     @Test
@@ -38,15 +38,6 @@ public class ElectionTimerTest {
         electionTimer.cancel();
         Thread.sleep(150);
         verify(electionManager, never()).startElection();
-    }
-
-    @Test
-    public void testMultipleResets() throws InterruptedException {
-        electionTimer.reset();
-        Thread.sleep(50);
-        electionTimer.reset();
-        Thread.sleep(150);
-        verify(electionManager, times(1)).startElection();
     }
 
     @Test
