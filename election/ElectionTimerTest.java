@@ -1,12 +1,20 @@
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Random;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class ElectionTimerTest {
-
+class ElectionTimerTest {
     @Mock
     private RaftConfig raftConfig;
 
@@ -16,35 +24,78 @@ public class ElectionTimerTest {
     @Mock
     private ElectionManager electionManager;
 
+    @Mock
+    private ScheduledExecutorService scheduler;
+
+    @Mock
+    private Random random;
+
+    @Mock
+    private ScheduledFuture<?> electionFuture;
+
     @InjectMocks
     private ElectionTimer electionTimer;
 
     @BeforeEach
-    public void setUp() {
-        when(raftConfig.getElectionTimeoutMillisMin()).thenReturn(100L);
-        when(raftConfig.getElectionTimeoutMillisMax()).thenReturn(101L);
+    void setUp() {
+        when(raftConfig.getElectionTimeoutMillisMin()).thenReturn(150L);
+        when(raftConfig.getElectionTimeoutMillisMax()).thenReturn(300L);
+        when(random.nextInt(anyInt())).thenReturn(50); // Controlled random for predictable timeout
     }
 
     @Test
-    public void testResetTriggersElection() throws InterruptedException {
+    void reset_whenNoFuture_schedulesNewElection() {
+        when(scheduler.schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(electionFuture);
+
         electionTimer.reset();
-        Thread.sleep(150);
-        verify(electionManager, times(1)).startElection();
+
+        verify(scheduler).schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS));
+        verify(electionFuture, never()).cancel(anyBoolean());
     }
 
     @Test
-    public void testCancelPreventsElection() throws InterruptedException {
+    void reset_whenFutureExists_cancelsAndSchedulesNew() {
+        when(scheduler.schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(electionFuture);
+        electionTimer.reset(); // Set initial future
+
+        reset(scheduler, electionFuture);
+        when(scheduler.schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(electionFuture);
+
         electionTimer.reset();
+
+        verify(electionFuture).cancel(false);
+        verify(scheduler).schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    void cancel_whenFutureExists_cancelsFuture() {
+        when(scheduler.schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(electionFuture);
+        electionTimer.reset(); // Set future
+
         electionTimer.cancel();
-        Thread.sleep(150);
-        verify(electionManager, never()).startElection();
+
+        verify(electionFuture).cancel(false);
     }
 
     @Test
-    public void testShutdownCancelsPendingElection() throws InterruptedException {
+    void cancel_whenNoFuture_doesNothing() {
+        electionTimer.cancel();
+
+        verify(electionFuture, never()).cancel(anyBoolean());
+    }
+
+    @Test
+    void reset_schedulesWithRandomTimeoutInRange() {
+        when(random.nextInt(151)).thenReturn(100); // 150 + 100 = 250ms
+        when(scheduler.schedule(any(Runnable.class), eq(250L), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(electionFuture);
+
         electionTimer.reset();
-        electionTimer.shutdown();
-        Thread.sleep(150);
-        verify(electionManager, never()).startElection();
+
+        verify(scheduler).schedule(any(Runnable.class), eq(250L), eq(TimeUnit.MILLISECONDS));
     }
 }
