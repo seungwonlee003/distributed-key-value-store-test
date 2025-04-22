@@ -1,13 +1,17 @@
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import static org.mockito.Mockito.*;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class RaftStateManagerTest {
+class RaftStateManagerTest {
+    @Mock
+    private RaftNodeState state;
 
     @Mock
     private HeartbeatManager heartbeatManager;
@@ -21,44 +25,37 @@ public class RaftStateManagerTest {
     @InjectMocks
     private RaftStateManager raftStateManager;
 
-    private RaftNodeState state;
-
     @BeforeEach
-    public void setUp() {
-        state = new RaftNodeState();
+    void setUp() {
+        when(state.getNodeId()).thenReturn(1);
+        when(state.getCurrentTerm()).thenReturn(2);
     }
 
     @Test
-    public void testBecomeLeader() {
-        state.setCurrentRole(Role.FOLLOWER);
-
+    void becomeLeader_setsRoleAndInitializes() {
         raftStateManager.becomeLeader();
 
-        assertEquals(Role.LEADER, state.getCurrentRole());
+        verify(state).setCurrentRole(Role.LEADER);
         verify(raftReplicationManager).initializeIndices();
         verify(heartbeatManager).startHeartbeats();
     }
 
     @Test
-    public void testBecomeFollower() {
-        state.setCurrentTerm(1);
-        state.setCurrentRole(Role.LEADER);
-        state.setVotedFor("node1");
-        state.setCurrentLeader("node1");
+    void becomeFollower_updatesStateAndResetsTimer() {
+        raftStateManager.becomeFollower(3);
 
-        raftStateManager.becomeFollower(2);
-
-        assertEquals(2, state.getCurrentTerm());
-        assertEquals(Role.FOLLOWER, state.getCurrentRole());
-        assertNull(state.getVotedFor());
-        assertNull(state.getCurrentLeader());
+        verify(state).setCurrentTerm(3);
+        verify(state).setCurrentRole(Role.FOLLOWER);
+        verify(state).setVotedFor(null);
+        verify(state).setCurrentLeader(null);
         verify(heartbeatManager).stopHeartbeats();
         verify(electionTimer).reset();
     }
 
     @Test
-    public void testResetElectionTimer() {
+    void resetElectionTimer_delegatesToElectionTimer() {
         raftStateManager.resetElectionTimer();
+
         verify(electionTimer).reset();
     }
 }
